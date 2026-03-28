@@ -12,9 +12,9 @@
   "issue_tracker": "https://github.com/barreeeiroo/Home-Assistant-Electric-Ireland/issues",
   "loggers": ["electric_ireland_insights"],
   "requirements": [
-    "beautifulsoup4~=4.12.3",
-    "homeassistant-historical-sensor==2.0.0rc4",
-    "requests~=2.32.3"
+    "beautifulsoup4>=4.14.3",
+    "homeassistant-historical-sensor==3.0.0a3",
+    "requests>=2.32.3"
   ],
   "version": "0.2.3"
 }

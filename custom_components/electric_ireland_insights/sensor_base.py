@@ -1,19 +1,21 @@
 import asyncio
-import itertools
 import logging
 import statistics
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, UTC
 from typing import List
 
-from homeassistant.components.recorder.models import StatisticData, StatisticMetaData, StatisticMeanType
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
+from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
+from homeassistant.components.recorder.statistics import StatisticMeanType, StatisticsRow
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 
 from homeassistant_historical_sensor import (
     HistoricalSensor,
     HistoricalState,
     PollUpdateMixin,
+    group_by_interval,
 )
+from homeassistant.helpers.event import async_track_time_interval
 
 from .api import ElectricIrelandScraper
 from .const import DOMAIN, LOOKUP_DAYS, PARALLEL_DAYS
@@ -23,14 +25,6 @@ LOGGER = logging.getLogger(DOMAIN)
 
 
 class Sensor(PollUpdateMixin, HistoricalSensor, SensorEntity):
-    #
-    # Base clases:
-    # - SensorEntity: This is a sensor, obvious
-    # - HistoricalSensor: This sensor implements historical sensor methods
-    # - PollUpdateMixin: Historical sensors disable poll, this mixing
-    #                    reenables poll only for historical states and not for
-    #                    present state
-    #
 
     def __init__(self, device_id: str, ei_api: ElectricIrelandScraper, name: str, metric: str, measurement_unit: str,
                  device_class: SensorDeviceClass):
@@ -43,64 +37,59 @@ class Sensor(PollUpdateMixin, HistoricalSensor, SensorEntity):
         self._attr_entity_id = f"{DOMAIN}_{metric}_{device_id}"
 
         self._attr_entity_registry_enabled_default = True
-        self._attr_state = None
+        self._attr_state_class = SensorStateClass.TOTAL
 
-        # Define whatever you are
         self._attr_native_unit_of_measurement = measurement_unit
         self._attr_device_class = device_class
 
         self._api: ElectricIrelandScraper = ei_api
         self._metric = metric
 
+    @property
+    def native_value(self):
+        return 0
+
+    @property
+    def state(self):
+        return 0
+
     async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
+        # Skip PollUpdateMixin.async_added_to_hass which blocks startup by
+        # awaiting the first data fetch. Instead call HistoricalSensor's version
+        # directly, schedule the initial fetch as a background task, and set up
+        # the periodic timer ourselves.
+        await HistoricalSensor.async_added_to_hass(self)
+
+        self.hass.async_create_task(
+            self._async_historical_handle_update()
+        )
+
+        self._remove_time_tracker_fn = async_track_time_interval(
+            self.hass,
+            self._async_historical_handle_update,
+            self.UPDATE_INTERVAL,
+        )
 
     async def async_update_historical(self):
-        # Fill `HistoricalSensor._attr_historical_states` with HistoricalState's
-        # This functions is equivaled to the `Sensor.async_update` from
-        # HomeAssistant core
-        #
-        # Important: You must provide datetime with tzinfo
+        # Important: You must provide timestamps as UTC unix timestamps
 
         loop = asyncio.get_running_loop()
 
-        await loop.run_in_executor(None, self._api.refresh_credentials)
-        scraper = self._api.scraper
-
-        if not scraper:
-            LOGGER.error("Failed to get scraper - login may have failed")
+        datapoints = await loop.run_in_executor(None, self._api.fetch_day_range)
+        if datapoints is None:
+            LOGGER.error("Failed to fetch data - login may have failed")
             return
 
         hist_states: List[HistoricalState] = []
+        for datapoint in datapoints:
+            state = datapoint.get(self._metric)
+            interval_end = datapoint.get("intervalEnd")
+            hist_states.append(HistoricalState(
+                state=state,
+                timestamp=interval_end,
+            ))
 
-        now = datetime.now(UTC)
-        # Build a datetime for "yesterday" since data is never published on the same day
-        yesterday = datetime(year=now.year, month=now.month, day=now.day, tzinfo=UTC) - timedelta(days=1)
-
-        executor_results = []
-
-        with ThreadPoolExecutor(max_workers=PARALLEL_DAYS) as executor:
-            current_date = yesterday - timedelta(days=LOOKUP_DAYS)
-            while current_date <= yesterday:
-                LOGGER.debug(f"Submitting {current_date}")
-                results = loop.run_in_executor(executor, scraper.get_data, current_date)
-                executor_results.append(results)
-                current_date += timedelta(days=1)
-
-        LOGGER.info("Finished launching jobs")
-
-        # For every launched job
-        for executor_result in executor_results:
-            # And now we parse the datapoints
-            for datapoint in await executor_result:
-                state = datapoint.get(self._metric)
-                dt = datetime.fromtimestamp(datapoint.get("intervalEnd"), tz=UTC)
-                hist_states.append(HistoricalState(
-                    state=state,
-                    dt=dt,
-                ))
-
-        hist_states.sort(key=lambda d: d.dt)
+        hist_states.sort(key=lambda d: d.timestamp)
 
         valid_datapoints: List[HistoricalState] = []
         null_datapoints: List[HistoricalState] = []
@@ -115,8 +104,9 @@ class Sensor(PollUpdateMixin, HistoricalSensor, SensorEntity):
             valid_datapoints.append(hist_state)
 
         if null_datapoints:
-            min_dt, max_dt = null_datapoints[0].dt, null_datapoints[len(null_datapoints) - 1].dt
-            LOGGER.info(f"Found {len(null_datapoints)} null datapoints, ranging from {min_dt} to {max_dt}")
+            min_ts = datetime.fromtimestamp(null_datapoints[0].timestamp, tz=UTC)
+            max_ts = datetime.fromtimestamp(null_datapoints[-1].timestamp, tz=UTC)
+            LOGGER.info(f"Found {len(null_datapoints)} null datapoints, ranging from {min_ts} to {max_ts}")
 
         if invalid_datapoints:
             LOGGER.warning(f"Found {len(invalid_datapoints)} invalid datapoints!")
@@ -124,21 +114,13 @@ class Sensor(PollUpdateMixin, HistoricalSensor, SensorEntity):
         if not valid_datapoints:
             LOGGER.error("Found no valid datapoints!")
         else:
-            min_dt, max_dt = valid_datapoints[0].dt, valid_datapoints[len(valid_datapoints) - 1].dt
-            LOGGER.info(f"Found {len(valid_datapoints)} valid datapoints, ranging from {min_dt} to {max_dt}")
+            min_ts = datetime.fromtimestamp(valid_datapoints[0].timestamp, tz=UTC)
+            max_ts = datetime.fromtimestamp(valid_datapoints[-1].timestamp, tz=UTC)
+            LOGGER.info(f"Found {len(valid_datapoints)} valid datapoints, ranging from {min_ts} to {max_ts}")
 
         self._attr_historical_states = [d for d in hist_states if d.state]
 
-    @property
-    def statistic_id(self) -> str:
-        return self.entity_id
-
     def get_statistic_metadata(self) -> StatisticMetaData:
-        #
-        # Add sum and mean to base statistics metadata
-        # Important: HistoricalSensor.get_statistic_metadata returns an
-        # internal source by default.
-        #
         meta = super().get_statistic_metadata()
         meta["has_sum"] = True
         meta["mean_type"] = StatisticMeanType.ARITHMETIC
@@ -146,26 +128,12 @@ class Sensor(PollUpdateMixin, HistoricalSensor, SensorEntity):
         return meta
 
     async def async_calculate_statistic_data(
-            self, hist_states: list[HistoricalState], *, latest: dict | None = None
+            self, hist_states: list[HistoricalState], *, latest: StatisticsRow | None = None
     ) -> list[StatisticData]:
-        #
-        # Group historical states by hour
-        # Calculate sum, mean, etc...
-        #
-
         accumulated = latest["sum"] if latest else 0
 
-        def hour_block_for_hist_state(hist_state: HistoricalState) -> datetime:
-            # XX:00:00 states belongs to previous hour block
-            if hist_state.dt.minute == 0 and hist_state.dt.second == 0:
-                dt = hist_state.dt - timedelta(hours=1)
-                return dt.replace(minute=0, second=0, microsecond=0)
-
-            else:
-                return hist_state.dt.replace(minute=0, second=0, microsecond=0)
-
         ret = []
-        for dt, collection_it in itertools.groupby(hist_states, key=hour_block_for_hist_state):
+        for block_ts, collection_it in group_by_interval(hist_states):
             collection = list(collection_it)
             mean = statistics.mean([x.state for x in collection])
             partial_sum = sum([x.state for x in collection])
@@ -173,7 +141,7 @@ class Sensor(PollUpdateMixin, HistoricalSensor, SensorEntity):
 
             ret.append(
                 StatisticData(
-                    start=dt,
+                    start=datetime.fromtimestamp(block_ts, tz=UTC),
                     state=partial_sum,
                     mean=mean,
                     sum=accumulated,

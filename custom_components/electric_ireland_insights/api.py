@@ -1,16 +1,20 @@
 import logging
-from datetime import datetime
+import time
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, UTC
 
 import requests
 from bs4 import BeautifulSoup
 from requests import RequestException
 
-from .const import DOMAIN
+from .const import DOMAIN, LOOKUP_DAYS, PARALLEL_DAYS
 
 
 LOGGER = logging.getLogger(DOMAIN)
 
 BASE_URL = "https://youraccountonline.electricireland.ie"
+
+CACHE_TTL_SECONDS = 300
 
 
 class ElectricIrelandScraper:
@@ -21,7 +25,52 @@ class ElectricIrelandScraper:
         self.__password = password
         self.__account_number = account_number
 
-    def refresh_credentials(self):
+        self.__cached_datapoints: list[dict] | None = None
+        self.__cache_timestamp: float = 0
+
+    def fetch_day_range(self) -> list[dict] | None:
+        now = time.monotonic()
+        if self.__cached_datapoints is not None and (now - self.__cache_timestamp) < CACHE_TTL_SECONDS:
+            LOGGER.debug("Using cached datapoints")
+            return self.__cached_datapoints
+
+        self.__refresh_credentials()
+        scraper = self.__scraper
+        if not scraper:
+            return None
+
+        yesterday = datetime(
+            year=datetime.now(UTC).year,
+            month=datetime.now(UTC).month,
+            day=datetime.now(UTC).day,
+            tzinfo=UTC,
+        ) - timedelta(days=1)
+
+        all_datapoints = []
+        executor_futures = []
+
+        with ThreadPoolExecutor(max_workers=PARALLEL_DAYS) as executor:
+            current_date = yesterday - timedelta(days=LOOKUP_DAYS)
+            while current_date <= yesterday:
+                LOGGER.debug(f"Submitting {current_date}")
+                future = executor.submit(scraper.get_data, current_date)
+                executor_futures.append(future)
+                current_date += timedelta(days=1)
+
+        LOGGER.info("Finished launching jobs")
+
+        for future in executor_futures:
+            try:
+                all_datapoints.extend(future.result())
+            except Exception as err:
+                LOGGER.error(f"Failed to get data: {err}")
+
+        self.__cached_datapoints = all_datapoints
+        self.__cache_timestamp = time.monotonic()
+
+        return all_datapoints
+
+    def __refresh_credentials(self):
         LOGGER.info("Trying to refresh credentials...")
         session = requests.Session()
 
@@ -31,12 +80,7 @@ class ElectricIrelandScraper:
 
         self.__scraper = MeterInsightScraper(session, meter_ids)
 
-    @property
-    def scraper(self):
-        return self.__scraper
-
     def __login_and_get_meter_ids(self, session):
-        # REQUEST 1: Get the Source token, and initialize the session
         LOGGER.debug("Getting Source Token...")
         res1 = session.get(f"{BASE_URL}/")
         try:
@@ -57,7 +101,6 @@ class ElectricIrelandScraper:
             LOGGER.error("Could not find rvt cookie")
             return None
 
-        # REQUEST 2: Perform Login
         LOGGER.debug("Performing Login...")
         res2 = session.post(
             f"{BASE_URL}/",
@@ -102,7 +145,6 @@ class ElectricIrelandScraper:
             LOGGER.warning("Failed to find Target Account; please verify it is the correct one")
             return None
 
-        # REQUEST 3: Navigate to Insights page to get meter IDs
         LOGGER.debug("Navigating to Insights page...")
         event_form = target_account.find("form", {"action": "/Accounts/OnEvent"})
         req3 = {"triggers_event": "AccountSelection.ToInsights"}
@@ -119,7 +161,6 @@ class ElectricIrelandScraper:
             LOGGER.error(f"Failed to Navigate to Insights: {err}")
             return None
 
-        # Extract meter IDs from #modelData div
         soup3 = BeautifulSoup(res3.text, "html.parser")
         model_data = soup3.find("div", {"id": "modelData"})
 
@@ -140,7 +181,6 @@ class ElectricIrelandScraper:
 
 
 class MeterInsightScraper:
-    """Scraper for the new Electric Ireland MeterInsight API."""
 
     def __init__(self, session, meter_ids):
         self.__session = session
@@ -149,15 +189,6 @@ class MeterInsightScraper:
         self.__premise = meter_ids["premise"]
 
     def get_data(self, target_date, is_granular=False):
-        """Fetch hourly usage data for a specific date.
-
-        Args:
-            target_date: The date to fetch data for
-            is_granular: Ignored (kept for API compatibility)
-
-        Returns:
-            List of datapoints with 'consumption', 'cost', and 'intervalEnd' keys
-        """
         date_str = target_date.strftime("%Y-%m-%d")
         LOGGER.debug(f"Getting hourly data for {date_str}...")
 
@@ -170,7 +201,6 @@ class MeterInsightScraper:
             LOGGER.error(f"Failed to get hourly usage data: {err}")
             return []
 
-        # Check if we got JSON or an error page
         content_type = response.headers.get('content-type', '')
         if 'application/json' not in content_type:
             LOGGER.error(f"Expected JSON but got {content_type}. Response: {response.text[:500]}")
@@ -189,20 +219,15 @@ class MeterInsightScraper:
         raw_datapoints = data.get("data", [])
         LOGGER.debug(f"Found {len(raw_datapoints)} hourly datapoints for {date_str}")
 
-        # Transform to expected format with 'consumption', 'cost', 'intervalEnd'
         datapoints = []
-
-        # Tariff buckets as seen in response on Smart TOU plan
         usage_tariff_keys = ("flatRate", "offPeak", "midPeak", "onPeak")
-        
+
         for dp in raw_datapoints:
             end_date_str = dp.get("endDate")
 
             if not end_date_str:
                 continue
 
-            # Parse ISO date and convert to Unix timestamp
-            # Format: "2025-12-01T00:59:59Z"
             try:
                 end_dt = datetime.fromisoformat(end_date_str.replace("Z", "+00:00"))
                 interval_end = int(end_dt.timestamp())
@@ -210,7 +235,6 @@ class MeterInsightScraper:
                 LOGGER.warning(f"Failed to parse date {end_date_str}: {err}")
                 continue
 
-            # Pick the first non‑null tariff bucket
             usage_entry = next(
                 (dp[key] for key in usage_tariff_keys if dp.get(key) is not None),
                 None
