@@ -17,12 +17,12 @@ It will also aggregate the report data into statistical buckets, so they can be 
 
 ### How does it work?
 
-It basically scrapes the Insights page that Electric Ireland provides. It will first mimic a user login interaction,
-and then will navigate to the page to fetch the data.
+It scrapes the Insights page that Electric Ireland provides. It will first mimic a user login interaction,
+navigate to the Insights page for the configured account, and then call the MeterInsight API to fetch hourly usage data.
 
-As this data is also feed from ESB ([Electrical Supply Board](https://esb.ie)), it is not in real time. They publish
+As this data is also fed from ESB ([Electrical Supply Board](https://esb.ie)), it is not in real time. They publish
 data with 1-3 days delay; this integration takes care of that and will fetch every hour and ingest data dated back up
-to 10 days. This job runs every hour, so whenever it gets published it should get feed into Home Assistant within 60
+to 30 days. This job runs every hour, so whenever it gets published it should get fed into Home Assistant within 60
 minutes.
 
 ### Why not fetching from ESB directly?
@@ -37,7 +37,7 @@ tariff does not offer the 30% Off Direct Debit, this integration will apply a tr
 
 So, in summary: Cost reports gross usage cost with VAT, without discount but also without standing charge or levy.
 
-### Why does the individual reporte device sometimes exceed the reported usage in Electric Ireland?
+### Why does the individual reported device sometimes exceed the reported usage in Electric Ireland?
 
 I don't have a clear answer to this. I have noticed this in some buckets, but there it is an issue in how the metrics
 are reported into buckets. It is an issue either in ESB / Electric Ireland reporting, that they report the intervals
@@ -50,7 +50,7 @@ into the wrong hour. If you take the previous and after, the total should be the
 
 ### Sensors
 
-* **Electric Ireland Consumption**: reports consumed data in kWh, in 30 minute intervals.
+* **Electric Ireland Consumption**: reports consumed data in kWh, in 60 minute intervals (24 datapoints per day).
 * **Electric Ireland Cost**: reports the total cost charged in 60 minute intervals (without discounts and without
   standing charge, just the gross "usage" as per the contracted tariff).
 
@@ -60,26 +60,23 @@ into the wrong hour. If you take the previous and after, the total should be the
     1. Create a GET request to retrieve the cookies and the state.
     2. Do a POST request to login into Electric Ireland.
     3. Scrape the dashboard to try to find the `div` with the target Account Number.
-    4. Navigate to the Insights page for that Account Number.
-2. Now, once we have that Insights page, we don't need the ELectric Ireland session anymore:
-    1. The page contains a payload to call Bidgely API (data API provider for Electric Ireland).
-    2. Authenticate using that payload against Bidgely API (no need for session or cookies).
-    3. Send requests to the API to fetch the data for required intervals.
-    4. Profit! 🎉
+    4. Navigate to the Insights page for that Account Number to obtain the meter IDs (partner, contract, premise).
+2. Using the same session, call the MeterInsight API:
+    1. For each day in the lookback window, request `/MeterInsight/{partner}/{contract}/{premise}/hourly-usage`.
+    2. Each response contains 24 hourly datapoints with consumption (kWh) and cost (EUR) per tariff bucket.
+    3. The active tariff bucket (flatRate, offPeak, midPeak, or onPeak) is extracted for each hour.
 
 ### Schedule
 
 Every hour:
 
-* Performs once the flow mentioned above to get the API credentials.
-* Launches requests for the 11th to 1st days before "now": if today is 20th January, then it will retrieve data
-  for all days between the 9th and 19th.
-* For Cost, it will receive 24 datapoints within the date.
-* For Consumption, it will receive 48 datapoints within the date.
-* It will ingest the data taking the last minute of the interval: if querying for 00:00 to 00:30, it will ingest it
-  effective at 00:29.
+* Performs once the login flow mentioned above to establish a session.
+* Launches requests for the 30th to 1st days before "now": if today is 20th January, then it will retrieve data
+  for all days between the 21st of December and 19th of January.
+* Both consumption and cost are returned in the same response, with 24 hourly datapoints per day.
+* Data is timestamped at the end of each hourly interval (e.g., `00:59:59` for the midnight hour).
 
 ## Acknowledgements
 
-* [Historical sensors for Home Assistant](https://github.com/ldotlopez/ha-historical-sensor): provided the library and 
+* [Historical sensors for Home Assistant](https://github.com/ldotlopez/ha-historical-sensor): provided the library and
   skeleton to create the bare minimum working version.
