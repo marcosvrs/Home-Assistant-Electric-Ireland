@@ -7,7 +7,7 @@ from typing import List
 
 from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
 from homeassistant.components.recorder.statistics import StatisticMeanType, StatisticsRow
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 
 from homeassistant_historical_sensor import (
     HistoricalSensor,
@@ -37,21 +37,12 @@ class Sensor(PollUpdateMixin, HistoricalSensor, SensorEntity):
         self._attr_entity_id = f"{DOMAIN}_{metric}_{device_id}"
 
         self._attr_entity_registry_enabled_default = True
-        self._attr_state_class = SensorStateClass.TOTAL
 
         self._attr_native_unit_of_measurement = measurement_unit
         self._attr_device_class = device_class
 
         self._api: ElectricIrelandScraper = ei_api
         self._metric = metric
-
-    @property
-    def native_value(self):
-        return 0
-
-    @property
-    def state(self):
-        return 0
 
     async def async_added_to_hass(self) -> None:
         # Skip PollUpdateMixin.async_added_to_hass which blocks startup by
