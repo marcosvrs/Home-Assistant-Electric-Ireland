@@ -1,4 +1,5 @@
 """Custom exceptions for Electric Ireland integration."""
+from __future__ import annotations
 
 
 class InvalidAuth(Exception):

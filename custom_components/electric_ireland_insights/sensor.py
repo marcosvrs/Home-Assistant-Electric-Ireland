@@ -1,16 +1,15 @@
 """Diagnostic sensor entities for Electric Ireland Insights."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Callable
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
 )
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
@@ -18,6 +17,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util.dt import utcnow
 
+from . import ElectricIrelandConfigEntry
 from .const import DOMAIN
 from .coordinator import ElectricIrelandCoordinator
 from .types import CoordinatorData
@@ -59,10 +59,10 @@ def _calc_freshness(data: CoordinatorData) -> float | None:
 
 async def async_setup_entry(
     hass: HomeAssistant,
-    config_entry: ConfigEntry,
+    config_entry: ElectricIrelandConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    coordinator: ElectricIrelandCoordinator = config_entry.runtime_data
+    coordinator = config_entry.runtime_data
     account = config_entry.data["account_number"]
     async_add_entities(
         ElectricIrelandDiagnosticSensor(coordinator, description, account)
@@ -70,7 +70,7 @@ async def async_setup_entry(
     )
 
 
-class ElectricIrelandDiagnosticSensor(CoordinatorEntity, SensorEntity):  # type: ignore[misc]  # CoordinatorEntity+SensorEntity multiple inheritance: HA typing incomplete
+class ElectricIrelandDiagnosticSensor(CoordinatorEntity[ElectricIrelandCoordinator], SensorEntity):  # type: ignore[misc]  # CoordinatorEntity+SensorEntity multiple inheritance: HA typing incomplete
     _attr_has_entity_name = True
 
     def __init__(
