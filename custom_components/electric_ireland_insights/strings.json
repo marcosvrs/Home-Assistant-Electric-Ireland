@@ -1,0 +1,46 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Electric Ireland Insights",
+        "description": "Enter your Electric Ireland online account credentials",
+        "data": {
+          "username": "Email",
+          "password": "Password",
+          "account_number": "Account Number"
+        },
+        "data_description": {
+          "username": "Your Electric Ireland online account email address",
+          "password": "Your Electric Ireland online account password",
+          "account_number": "Your Electric Ireland account number (found on your bill)"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Electric Ireland",
+        "description": "Your Electric Ireland credentials have expired. Please re-enter your password.",
+        "data": {
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid username or password",
+      "cannot_connect": "Unable to connect to Electric Ireland. Please check your internet connection.",
+      "account_not_found": "Account number not found. Please verify your account number."
+    },
+    "abort": {
+      "already_configured": "This Electric Ireland account is already configured",
+      "reauth_successful": "Re-authentication was successful"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "last_import_time": {
+        "name": "Last Import Time"
+      },
+      "data_freshness_days": {
+        "name": "Data Freshness"
+      }
+    }
+  }
+}
