@@ -1,3 +1,4 @@
+# pyright: reportMissingImports=false
 """Diagnostics support for Electric Ireland Insights."""
 from __future__ import annotations
 
@@ -9,7 +10,14 @@ from homeassistant.core import HomeAssistant
 
 from .coordinator import ElectricIrelandCoordinator
 
-TO_REDACT = {"username", "password", "partner_id", "contract_id", "premise_id"}
+TO_REDACT = {
+    "username",
+    "password",
+    "partner_id",
+    "contract_id",
+    "premise_id",
+    "account_number",
+}
 
 
 async def async_get_config_entry_diagnostics(

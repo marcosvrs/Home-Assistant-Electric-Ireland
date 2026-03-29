@@ -1,11 +1,12 @@
 # pyright: reportMissingImports=false
 """Tests for Electric Ireland diagnostics."""
-from unittest.mock import MagicMock
 from datetime import datetime, timezone
+from unittest.mock import MagicMock
 
 from custom_components.electric_ireland_insights.diagnostics import (
     async_get_config_entry_diagnostics,
 )
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 UTC = timezone.utc
 
@@ -39,7 +40,34 @@ async def test_diagnostics_redacts_credentials(hass, enable_custom_integrations,
     config = result["config_entry"]
     assert config.get("username") != "test@test.com"
     assert config.get("password") != "testpass"
-    assert config.get("account_number") == "951785073"
+    assert config.get("account_number") == "**REDACTED**"
+
+
+async def test_diagnostics_redacts_cached_ids(hass, enable_custom_integrations):
+    mock_config_entry = MockConfigEntry(
+        domain="electric_ireland_insights",
+        data={
+            "username": "test@test.com",
+            "password": "testpass",
+            "partner_id": "P123",
+            "contract_id": "C456",
+            "premise_id": "PR789",
+            "account_number": "ACC001",
+        },
+        unique_id="ACC001",
+    )
+    mock_config_entry.add_to_hass(hass)
+    mock_coordinator = MagicMock()
+    mock_coordinator.data = {"last_import": None, "datapoint_count": 0}
+    mock_config_entry.runtime_data = mock_coordinator
+
+    result = await async_get_config_entry_diagnostics(hass, mock_config_entry)
+
+    config = result["config_entry"]
+    assert config.get("partner_id") == "**REDACTED**"
+    assert config.get("contract_id") == "**REDACTED**"
+    assert config.get("premise_id") == "**REDACTED**"
+    assert config.get("account_number") == "**REDACTED**"
 
 
 async def test_diagnostics_coordinator_data_passthrough(hass, enable_custom_integrations, mock_config_entry):
