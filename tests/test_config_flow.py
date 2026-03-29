@@ -12,7 +12,7 @@ from custom_components.electric_ireland_insights.exceptions import (
 )
 
 
-async def test_user_flow_success(hass, mock_config_entry):
+async def test_user_flow_success(hass, enable_custom_integrations, mock_config_entry):
     """Test successful user flow creates a config entry."""
     with patch(
         "custom_components.electric_ireland_insights.config_flow.ElectricIrelandAPI"
@@ -43,7 +43,7 @@ async def test_user_flow_success(hass, mock_config_entry):
         assert result2["data"]["account_number"] == "951785073"
 
 
-async def test_user_flow_invalid_auth(hass):
+async def test_user_flow_invalid_auth(hass, enable_custom_integrations):
     """Test user flow shows error on invalid auth."""
     with patch(
         "custom_components.electric_ireland_insights.config_flow.ElectricIrelandAPI"
@@ -65,7 +65,7 @@ async def test_user_flow_invalid_auth(hass):
         assert result2["errors"]["base"] == "invalid_auth"
 
 
-async def test_user_flow_cannot_connect(hass):
+async def test_user_flow_cannot_connect(hass, enable_custom_integrations):
     """Test user flow shows error on connection failure."""
     with patch(
         "custom_components.electric_ireland_insights.config_flow.ElectricIrelandAPI"
@@ -87,7 +87,7 @@ async def test_user_flow_cannot_connect(hass):
         assert result2["errors"]["base"] == "cannot_connect"
 
 
-async def test_user_flow_account_not_found(hass):
+async def test_user_flow_account_not_found(hass, enable_custom_integrations):
     """Test user flow shows error when account not found."""
     with patch(
         "custom_components.electric_ireland_insights.config_flow.ElectricIrelandAPI"
@@ -109,7 +109,7 @@ async def test_user_flow_account_not_found(hass):
         assert result2["errors"]["base"] == "account_not_found"
 
 
-async def test_user_flow_duplicate_account(hass, mock_config_entry):
+async def test_user_flow_duplicate_account(hass, enable_custom_integrations, mock_config_entry):
     """Test that configuring the same account twice aborts."""
     mock_config_entry.add_to_hass(hass)
 
@@ -139,7 +139,7 @@ async def test_user_flow_duplicate_account(hass, mock_config_entry):
         assert result2["reason"] == "already_configured"
 
 
-async def test_reauth_flow_success(hass, mock_config_entry):
+async def test_reauth_flow_success(hass, enable_custom_integrations, mock_config_entry):
     """Test reauth flow updates credentials successfully."""
     mock_config_entry.add_to_hass(hass)
 
@@ -166,7 +166,7 @@ async def test_reauth_flow_success(hass, mock_config_entry):
         assert result2["reason"] == "reauth_successful"
 
 
-async def test_reauth_flow_invalid_auth(hass, mock_config_entry):
+async def test_reauth_flow_invalid_auth(hass, enable_custom_integrations, mock_config_entry):
     """Test reauth flow shows error on invalid password."""
     mock_config_entry.add_to_hass(hass)
 

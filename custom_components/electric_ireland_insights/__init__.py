@@ -1,3 +1,6 @@
+"""Electric Ireland Insights integration."""
+from __future__ import annotations
+
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -5,47 +8,28 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 
 from .const import DOMAIN
+from .coordinator import ElectricIrelandCoordinator
 
+_LOGGER = logging.getLogger(DOMAIN)
 
-LOGGER = logging.getLogger(DOMAIN)
-
-PLATFORMS = ["sensor"]
+type ElectricIrelandConfigEntry = ConfigEntry[ElectricIrelandCoordinator]
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the Electric Ireland Insights component."""
-    # Ensure the domain is registered in the hass.data store
-    hass.data.setdefault(DOMAIN, {})
-    LOGGER.debug("Electric Ireland Insights component initialized.")
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Electric Ireland Insights from a config entry."""
-    if DOMAIN not in hass.data:
-        hass.data[DOMAIN] = {}
+    coordinator = ElectricIrelandCoordinator(hass, entry)
 
-    # Store entry data in hass.data for later use
-    hass.data[DOMAIN][entry.entry_id] = entry.data
+    entry.runtime_data = coordinator
 
-    # Forward the entry setup to the sensor platform
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    LOGGER.debug(f"Forwarded config entry setup to {PLATFORMS} platforms.")
+    await coordinator.async_config_entry_first_refresh()
+
+    entry.async_on_unload(coordinator.async_add_listener(lambda: None))
+
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
-    # Unload platforms
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unload_ok:
-        # Clean up the stored entry data
-        hass.data[DOMAIN].pop(entry.entry_id)
-        LOGGER.debug(f"Successfully unloaded config entry {entry.entry_id}.")
-
-    # If no entries remain, clean up the domain
-    if not hass.data[DOMAIN]:
-        hass.data.pop(DOMAIN)
-        LOGGER.debug("No more entries. Cleaned up domain.")
-
-    return unload_ok
+    return True

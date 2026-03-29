@@ -3,13 +3,7 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from homeassistant import loader
 from pytest_homeassistant_custom_component.common import MockConfigEntry
-
-
-@pytest.fixture(autouse=True)
-def auto_enable_custom_integrations(hass):
-    hass.data.pop(loader.DATA_CUSTOM_COMPONENTS)
 
 
 SAMPLE_DATAPOINTS = [

@@ -8,6 +8,9 @@ from homeassistant.components.recorder import get_instance
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
+from pytest_homeassistant_custom_component.components.recorder.common import (
+    async_wait_recording_done,
+)
 
 from custom_components.electric_ireland_insights.const import (
     DOMAIN,
@@ -145,8 +148,7 @@ async def test_consumption_statistics_correct(recorder_mock, hass, mock_config_e
         coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
         await coordinator._async_update_data()
 
-    await get_instance(hass).async_add_executor_job(lambda: None)
-    await hass.async_block_till_done()
+    await async_wait_recording_done(hass)
 
     start = datetime(2026, 3, 23, 0, 0, tzinfo=UTC)
     end = datetime(2026, 3, 24, 0, 0, tzinfo=UTC)
@@ -198,8 +200,7 @@ async def test_cost_statistics_correct(recorder_mock, hass, mock_config_entry):
         coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
         await coordinator._async_update_data()
 
-    await get_instance(hass).async_add_executor_job(lambda: None)
-    await hass.async_block_till_done()
+    await async_wait_recording_done(hass)
 
     start = datetime(2026, 3, 23, 0, 0, tzinfo=UTC)
     end = datetime(2026, 3, 24, 0, 0, tzinfo=UTC)
@@ -251,8 +252,7 @@ async def test_statistic_id_format(recorder_mock, hass, mock_config_entry):
         coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
         await coordinator._async_update_data()
 
-    await get_instance(hass).async_add_executor_job(lambda: None)
-    await hass.async_block_till_done()
+    await async_wait_recording_done(hass)
 
     start = datetime(2026, 3, 23, 0, 0, tzinfo=UTC)
     end = datetime(2026, 3, 24, 0, 0, tzinfo=UTC)
@@ -309,8 +309,7 @@ async def test_interval_start_alignment(recorder_mock, hass, mock_config_entry):
         coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
         await coordinator._async_update_data()
 
-    await get_instance(hass).async_add_executor_job(lambda: None)
-    await hass.async_block_till_done()
+    await async_wait_recording_done(hass)
 
     start = datetime(2026, 3, 23, 0, 0, 0, tzinfo=UTC)
     end = datetime(2026, 3, 23, 1, 0, 0, tzinfo=UTC)
@@ -328,7 +327,7 @@ async def test_interval_start_alignment(recorder_mock, hass, mock_config_entry):
     assert STAT_ID_CONSUMPTION in stats
     assert len(stats[STAT_ID_CONSUMPTION]) == 1
     stat_entry = stats[STAT_ID_CONSUMPTION][0]
-    assert stat_entry["start"] == start
+    assert stat_entry["start"] == start.timestamp()
 
 
 # ---------------------------------------------------------------------------
@@ -491,8 +490,7 @@ async def test_empty_data_no_statistics(recorder_mock, hass, mock_config_entry):
         coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
         await coordinator._async_update_data()
 
-    await get_instance(hass).async_add_executor_job(lambda: None)
-    await hass.async_block_till_done()
+    await async_wait_recording_done(hass)
 
     start = datetime(2026, 1, 1, 0, 0, tzinfo=UTC)
     end = datetime(2026, 12, 31, 0, 0, tzinfo=UTC)
