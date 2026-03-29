@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Callable
 
 from homeassistant.components.sensor import (
@@ -16,6 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util.dt import utcnow
 
 from .const import DOMAIN
 from .coordinator import ElectricIrelandCoordinator
@@ -47,15 +48,12 @@ DIAGNOSTIC_SENSORS: tuple[ElectricIrelandSensorDescription, ...] = (
 
 
 def _calc_freshness(data: dict) -> float | None:
-    from datetime import UTC
-
     latest = data.get("latest_data_timestamp")
     if latest is None:
         return None
-    from homeassistant.util.dt import utcnow
 
     delta = utcnow() - latest
-    return round(delta.total_seconds() / 86400, 1)
+    return max(0.0, round(delta.total_seconds() / 86400, 1))
 
 
 async def async_setup_entry(
@@ -83,10 +81,13 @@ class ElectricIrelandDiagnosticSensor(CoordinatorEntity, SensorEntity):
         super().__init__(coordinator)
         self.entity_description = description
         self._attr_unique_id = f"{DOMAIN}_{account_number}_{description.key}"
+        self._attr_entity_registry_enabled_default = False
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, account_number)},
             name=f"Electric Ireland ({account_number})",
             entry_type=DeviceEntryType.SERVICE,
+            manufacturer="Electric Ireland",
+            model="Smart Meter Insights",
         )
 
     @property
