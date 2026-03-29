@@ -137,7 +137,9 @@ rules:
   test-before-setup:
     status: done
     comment: __init__.py validates credentials in async_setup_entry before finishing setup.
-  test-coverage: todo
+   test-coverage:
+     status: done
+     comment: pytest tests/ --cov --cov-fail-under=95 → 97.85% with 85 tests.
   unique-config-entry:
     status: done
     comment: config_flow.py calls async_set_unique_id(account_number) and aborts duplicates.
