@@ -77,7 +77,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
             )
             lookback = LOOKUP_DAYS if existing else INITIAL_LOOKBACK_DAYS
 
-            if not hasattr(self, "_has_imported_before"):
+            if not self._has_imported_before:
                 self._has_imported_before = bool(existing)
 
             entry_data = self.config_entry.data
