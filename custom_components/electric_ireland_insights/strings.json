@@ -21,6 +21,14 @@
         "data": {
           "password": "Password"
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Electric Ireland",
+        "description": "Update credentials for {username} or force re-discovery of meter IDs.",
+        "data": {
+          "password": "Password",
+          "force_rediscovery": "Force re-discovery of meter IDs"
+        }
       }
     },
     "error": {
@@ -30,7 +38,8 @@
     },
     "abort": {
       "already_configured": "This Electric Ireland account is already configured",
-      "reauth_successful": "Re-authentication was successful"
+      "reauth_successful": "Re-authentication was successful",
+      "reconfigure_successful": "Reconfiguration was successful"
     }
   },
   "entity": {

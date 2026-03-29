@@ -222,3 +222,148 @@ async def test_ids_cached_during_config_flow(recorder_mock, hass, enable_custom_
         "partner_id should be stored in entry data after successful config flow"
     assert result2["data"].get("contract_id") == "C_TEST"
     assert result2["data"].get("premise_id") == "PR_TEST"
+
+
+async def test_reconfigure_success(recorder_mock, hass, enable_custom_integrations):
+    """Test reconfigure updates password and clears IDs when password changes."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "username": "test@test.com",
+            "password": "oldpass",
+            "account_number": "951785073",
+            "partner_id": "p1",
+            "contract_id": "c1",
+            "premise_id": "pr1",
+        },
+        unique_id="951785073",
+    )
+    entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.electric_ireland_insights.config_flow.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.config_flow.async_create_clientsession"
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.validate_credentials = AsyncMock(
+            return_value={"partner": "p2", "contract": "c2", "premise": "pr2"}
+        )
+        mock_api_class.return_value = mock_api_instance
+
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={
+                "source": config_entries.SOURCE_RECONFIGURE,
+                "entry_id": entry.entry_id,
+            },
+        )
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == "reconfigure"
+
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"password": "newpass", "force_rediscovery": False},
+        )
+        assert result2["type"] == FlowResultType.ABORT
+        assert result2["reason"] == "reconfigure_successful"
+
+    updated = hass.config_entries.async_get_entry(entry.entry_id)
+    assert updated.data["password"] == "newpass"
+    assert updated.data["partner_id"] is None
+    assert updated.data["contract_id"] is None
+    assert updated.data["premise_id"] is None
+
+
+async def test_reconfigure_force_rediscovery(recorder_mock, hass, enable_custom_integrations):
+    """Test reconfigure clears cached IDs when force_rediscovery is True."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "username": "test@test.com",
+            "password": "testpass",
+            "account_number": "951785073",
+            "partner_id": "p1",
+            "contract_id": "c1",
+            "premise_id": "pr1",
+        },
+        unique_id="951785073",
+    )
+    entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.electric_ireland_insights.config_flow.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.config_flow.async_create_clientsession"
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.validate_credentials = AsyncMock(
+            return_value={"partner": "p2", "contract": "c2", "premise": "pr2"}
+        )
+        mock_api_class.return_value = mock_api_instance
+
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={
+                "source": config_entries.SOURCE_RECONFIGURE,
+                "entry_id": entry.entry_id,
+            },
+        )
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"password": "testpass", "force_rediscovery": True},
+        )
+        assert result2["type"] == FlowResultType.ABORT
+        assert result2["reason"] == "reconfigure_successful"
+
+    updated = hass.config_entries.async_get_entry(entry.entry_id)
+    assert updated.data["password"] == "testpass"
+    assert updated.data["partner_id"] is None
+    assert updated.data["contract_id"] is None
+    assert updated.data["premise_id"] is None
+
+
+async def test_reconfigure_auth_error(recorder_mock, hass, enable_custom_integrations):
+    """Test reconfigure shows error on invalid credentials."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            "username": "test@test.com",
+            "password": "testpass",
+            "account_number": "951785073",
+            "partner_id": "p1",
+            "contract_id": "c1",
+            "premise_id": "pr1",
+        },
+        unique_id="951785073",
+    )
+    entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.electric_ireland_insights.config_flow.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.config_flow.async_create_clientsession"
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.validate_credentials = AsyncMock(side_effect=InvalidAuth)
+        mock_api_class.return_value = mock_api_instance
+
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={
+                "source": config_entries.SOURCE_RECONFIGURE,
+                "entry_id": entry.entry_id,
+            },
+        )
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"password": "wrongpass", "force_rediscovery": False},
+        )
+        assert result2["type"] == FlowResultType.FORM
+        assert result2["errors"]["base"] == "invalid_auth"

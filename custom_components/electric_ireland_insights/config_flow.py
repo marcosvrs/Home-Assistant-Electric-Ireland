@@ -31,6 +31,13 @@ STEP_REAUTH_DATA_SCHEMA = vol.Schema(
     }
 )
 
+STEP_RECONFIGURE_DATA_SCHEMA = vol.Schema(
+    {
+        vol.Required("password"): str,
+        vol.Optional("force_rediscovery", default=False): bool,
+    }
+)
+
 
 class ElectricIrelandInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Electric Ireland Insights."""
@@ -132,5 +139,66 @@ class ElectricIrelandInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN
         return self.async_show_form(
             step_id="reauth_confirm",
             data_schema=STEP_REAUTH_DATA_SCHEMA,
+            errors=errors,
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle reconfiguration of credentials."""
+        errors: dict[str, str] = {}
+        entry = self._get_reconfigure_entry()
+
+        if user_input is not None:
+            username = entry.data["username"]
+            password = user_input["password"]
+            force_rediscovery = user_input.get("force_rediscovery", False)
+
+            try:
+                session = async_create_clientsession(
+                    self.hass, cookie_jar=aiohttp.CookieJar()
+                )
+                api = ElectricIrelandAPI(
+                    username,
+                    password,
+                    entry.data["account_number"],
+                )
+                meter_ids = await api.validate_credentials(session)
+            except InvalidAuth:
+                errors["base"] = "invalid_auth"
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except AccountNotFound:
+                errors["base"] = "account_not_found"
+            except Exception:
+                _LOGGER.exception("Unexpected exception during reconfigure")
+                errors["base"] = "cannot_connect"
+            else:
+                password_changed = password != entry.data["password"]
+                if force_rediscovery or password_changed:
+                    new_data = {
+                        **entry.data,
+                        "password": password,
+                        "partner_id": None,
+                        "contract_id": None,
+                        "premise_id": None,
+                    }
+                else:
+                    new_data = {
+                        **entry.data,
+                        "password": password,
+                        "partner_id": meter_ids.get("partner"),
+                        "contract_id": meter_ids.get("contract"),
+                        "premise_id": meter_ids.get("premise"),
+                    }
+                return self.async_update_reload_and_abort(entry, data=new_data)
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=self.add_suggested_values_to_schema(
+                STEP_RECONFIGURE_DATA_SCHEMA,
+                user_input or {"password": entry.data["password"]},
+            ),
+            description_placeholders={"username": entry.data["username"]},
             errors=errors,
         )
