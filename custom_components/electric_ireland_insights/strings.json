@@ -6,13 +6,18 @@
         "description": "Enter your Electric Ireland online account credentials",
         "data": {
           "username": "Email",
-          "password": "Password",
-          "account_number": "Account Number"
+          "password": "Password"
         },
         "data_description": {
           "username": "Your Electric Ireland online account email address",
-          "password": "Your Electric Ireland online account password",
-          "account_number": "Your Electric Ireland account number (found on your bill)"
+          "password": "Your Electric Ireland online account password"
+        }
+      },
+      "account": {
+        "title": "Select Account",
+        "description": "{num_accounts} electricity account(s) found for this login. Select which account to configure.",
+        "data": {
+          "account_number": "Account"
         }
       },
       "reauth_confirm": {
@@ -34,12 +39,15 @@
     "error": {
       "invalid_auth": "Invalid username or password",
       "cannot_connect": "Unable to connect to Electric Ireland. Please check your internet connection.",
-      "account_not_found": "Account number not found. Please verify your account number."
+      "account_not_found": "No electricity accounts found for this user."
     },
     "abort": {
       "already_configured": "This Electric Ireland account is already configured",
       "reauth_successful": "Re-authentication was successful",
-      "reconfigure_successful": "Reconfiguration was successful"
+      "reconfigure_successful": "Reconfiguration was successful",
+      "invalid_auth": "Authentication failed during account setup",
+      "cannot_connect": "Unable to connect to Electric Ireland during account setup",
+      "account_not_found": "The selected account could not be verified"
     }
   },
   "entity": {

@@ -18,12 +18,97 @@ BASE_URL = "https://youraccountonline.electricireland.ie"
 
 class ElectricIrelandAPI:
 
-    def __init__(self, username: str, password: str, account_number: str) -> None:
+    def __init__(
+        self, username: str, password: str, account_number: str | None = None
+    ) -> None:
         self._username = username
         self._password = password
         self._account_number = account_number
 
-    async def validate_credentials(self, session: aiohttp.ClientSession) -> MeterIds:
+    async def discover_accounts(
+        self, session: aiohttp.ClientSession
+    ) -> list[dict[str, str]]:
+        """Scrape the post-login page and return all electricity account numbers.
+
+        Returns a list of dicts with keys: account_number, display_name.
+        Raises CannotConnect on network errors, AccountNotFound if no accounts found.
+        """
+        timeout = aiohttp.ClientTimeout(total=30)
+
+        # Step 1: fetch login page to get tokens
+        async with session.get(f"{BASE_URL}/", timeout=timeout) as res1:
+            res1.raise_for_status()
+            html1 = await res1.text()
+            rvt = res1.cookies.get("rvt")
+            rvt = rvt.value if rvt else None
+
+        soup1 = BeautifulSoup(html1, "html.parser")
+        source_input = soup1.find("input", attrs={"name": "Source"})
+        source_val = source_input.get("value") if isinstance(source_input, Tag) else None
+        source = source_val if isinstance(source_val, str) else None
+
+        if not source or not rvt:
+            raise CannotConnect("Could not extract login tokens")
+
+        # Step 2: POST login
+        async with session.post(
+            f"{BASE_URL}/",
+            data={
+                "LoginFormData.UserName": self._username,
+                "LoginFormData.Password": self._password,
+                "rvt": rvt,
+                "Source": source,
+                "PotText": "",
+                "__EiTokPotText": "",
+                "ReturnUrl": "",
+                "AccountNumber": "",
+            },
+            timeout=timeout,
+        ) as res2:
+            res2.raise_for_status()
+            html2 = await res2.text()
+
+        soup2 = BeautifulSoup(html2, "html.parser")
+        account_divs = soup2.find_all("div", {"class": "my-accounts__item"})
+
+        if not account_divs:
+            raise AccountNotFound("No accounts found for this user")
+
+        accounts: list[dict[str, str]] = []
+        for account_div in account_divs:
+            account_number_el = account_div.find("p", {"class": "account-number"})
+            if not account_number_el:
+                continue
+            account_number = account_number_el.text.strip()
+
+            # Only include electricity accounts
+            is_elec = account_div.find_all("h2", {"class": "account-electricity-icon"})
+            if len(is_elec) != 1:
+                continue
+
+            # Build display name from account number + any label
+            label_el = account_div.find("h3", {"class": "account-label"})
+            label = label_el.text.strip() if label_el else None
+            display_name = f"{account_number}" + (
+                f" ({label})" if label else ""
+            )
+
+            accounts.append(
+                {
+                    "account_number": account_number,
+                    "display_name": display_name,
+                }
+            )
+
+        if not accounts:
+            raise AccountNotFound("No electricity accounts found for this user")
+
+        LOGGER.info("Discovered %d account(s)", len(accounts))
+        return accounts
+
+    async def validate_credentials(
+        self, session: aiohttp.ClientSession
+    ) -> MeterIds:
         client = await self._login(session)
         return {
             "partner": client._partner,
@@ -280,6 +365,8 @@ class ElectricIrelandAPI:
             raise CannotConnect(str(err)) from err
         except asyncio.TimeoutError:
             raise CannotConnect("Connection timed out")
+
+
 
 
 class MeterInsightClient:

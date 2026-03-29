@@ -6,7 +6,6 @@ import logging
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
@@ -21,33 +20,16 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required("username"): str,
         vol.Required("password"): str,
-        vol.Required("account_number"): str,
-    }
-)
-
-STEP_REAUTH_DATA_SCHEMA = vol.Schema(
-    {
-        vol.Required("password"): str,
-    }
-)
-
-STEP_RECONFIGURE_DATA_SCHEMA = vol.Schema(
-    {
-        vol.Required("password"): str,
-        vol.Optional("force_rediscovery", default=False): bool,
     }
 )
 
 
 class ElectricIrelandInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg,misc]  # HA ConfigFlow metaclass requires domain=; misc covers TypedDict compatibility
-    """Handle a config flow for Electric Ireland Insights."""
-
     VERSION = 2
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle the initial step."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -58,9 +40,8 @@ class ElectricIrelandInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN
                 api = ElectricIrelandAPI(
                     user_input["username"],
                     user_input["password"],
-                    user_input["account_number"],
                 )
-                meter_ids = await api.validate_credentials(session)
+                accounts = await api.discover_accounts(session)
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
             except CannotConnect:
@@ -71,17 +52,14 @@ class ElectricIrelandInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN
                 _LOGGER.exception("Unexpected exception")
                 errors["base"] = "cannot_connect"
             else:
-                await self.async_set_unique_id(user_input["account_number"])
-                self._abort_if_unique_id_configured()
-                return self.async_create_entry(
-                    title=f"{NAME} ({user_input['account_number']})",
-                    data={
-                        **user_input,
-                        "partner_id": meter_ids.get("partner"),
-                        "contract_id": meter_ids.get("contract"),
-                        "premise_id": meter_ids.get("premise"),
-                    },
-                )
+                self._username = user_input["username"]
+                self._password = user_input["password"]
+                self._accounts = accounts
+
+                if len(accounts) == 1:
+                    return await self._finish_flow(accounts[0]["account_number"])
+
+                return await self.async_step_account()
 
         return self.async_show_form(
             step_id="user",
@@ -89,16 +67,79 @@ class ElectricIrelandInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN
             errors=errors,
         )
 
+    async def async_step_account(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            account_number = user_input.get("account_number")
+            if not account_number:
+                errors["base"] = "account_not_found"
+            else:
+                return await self._finish_flow(account_number)
+
+        accounts = self._accounts
+        schema = vol.Schema(
+            {
+                vol.Required("account_number"): vol.In(
+                    {acc["account_number"]: acc["display_name"] for acc in accounts}
+                ),
+            }
+        )
+
+        return self.async_show_form(
+            step_id="account",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={
+                "num_accounts": str(len(accounts)),
+            },
+        )
+
+    async def _finish_flow(self, account_number: str) -> FlowResult:
+        try:
+            session = async_create_clientsession(
+                self.hass, cookie_jar=aiohttp.CookieJar()
+            )
+            api = ElectricIrelandAPI(
+                self._username,
+                self._password,
+                account_number,
+            )
+            meter_ids = await api.validate_credentials(session)
+        except InvalidAuth:
+            return self.async_abort(reason="invalid_auth")
+        except CannotConnect:
+            return self.async_abort(reason="cannot_connect")
+        except AccountNotFound:
+            return self.async_abort(reason="account_not_found")
+        except Exception:
+            _LOGGER.exception("Unexpected exception during account setup")
+            return self.async_abort(reason="cannot_connect")
+
+        await self.async_set_unique_id(account_number)
+        self._abort_if_unique_id_configured()
+        return self.async_create_entry(
+            title=f"{NAME} ({account_number})",
+            data={
+                "username": self._username,
+                "password": self._password,
+                "account_number": account_number,
+                "partner_id": meter_ids.get("partner"),
+                "contract_id": meter_ids.get("contract"),
+                "premise_id": meter_ids.get("premise"),
+            },
+        )
+
     async def async_step_reauth(
         self, entry_data: dict[str, Any]
     ) -> FlowResult:
-        """Handle re-authentication."""
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle re-authentication confirmation."""
         errors: dict[str, str] = {}
         reauth_entry = self._get_reauth_entry()
 
@@ -138,14 +179,13 @@ class ElectricIrelandInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN
 
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=STEP_REAUTH_DATA_SCHEMA,
+            data_schema=vol.Schema({vol.Required("password"): str}),
             errors=errors,
         )
 
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle reconfiguration of credentials."""
         errors: dict[str, str] = {}
         entry = self._get_reconfigure_entry()
 
@@ -196,7 +236,12 @@ class ElectricIrelandInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN
         return self.async_show_form(
             step_id="reconfigure",
             data_schema=self.add_suggested_values_to_schema(
-                STEP_RECONFIGURE_DATA_SCHEMA,
+                vol.Schema(
+                    {
+                        vol.Required("password"): str,
+                        vol.Optional("force_rediscovery", default=False): bool,
+                    }
+                ),
                 user_input or {"password": entry.data["password"]},
             ),
             description_placeholders={"username": entry.data["username"]},
