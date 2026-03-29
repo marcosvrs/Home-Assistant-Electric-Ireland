@@ -50,11 +50,12 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
         )
         self._last_update_success = True
         self._has_imported_before = False
+        self._session = async_create_clientsession(
+            hass, cookie_jar=aiohttp.CookieJar()
+        )
 
     async def _async_update_data(self) -> CoordinatorData:
-        session = async_create_clientsession(
-            self.hass, cookie_jar=aiohttp.CookieJar()
-        )
+        session = self._session
         was_successful = self._last_update_success
 
         def _mark_success(result: CoordinatorData) -> CoordinatorData:
@@ -194,7 +195,6 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
 
         filtered.sort(key=lambda x: x[0])
         overlap_start = filtered[0][0]
-        overlap_end = filtered[-1][0] + timedelta(hours=1)
 
         existing_before = await get_instance(self.hass).async_add_executor_job(
             statistics_during_period,

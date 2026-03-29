@@ -35,37 +35,45 @@ class ElectricIrelandAPI:
         """
         timeout = aiohttp.ClientTimeout(total=30)
 
-        # Step 1: fetch login page to get tokens
-        async with session.get(f"{BASE_URL}/", timeout=timeout) as res1:
-            res1.raise_for_status()
-            html1 = await res1.text()
-            rvt_cookie = res1.cookies.get("rvt")
-            rvt = rvt_cookie.value if rvt_cookie else None
+        try:
+            # Step 1: fetch login page to get tokens
+            async with session.get(f"{BASE_URL}/", timeout=timeout) as res1:
+                res1.raise_for_status()
+                html1 = await res1.text()
+                rvt_cookie = res1.cookies.get("rvt")
+                rvt = rvt_cookie.value if rvt_cookie else None
 
-        soup1 = BeautifulSoup(html1, "html.parser")
-        source_input = soup1.find("input", attrs={"name": "Source"})
-        source_val = source_input.get("value") if isinstance(source_input, Tag) else None
-        source = source_val if isinstance(source_val, str) else None
+            soup1 = BeautifulSoup(html1, "html.parser")
+            source_input = soup1.find("input", attrs={"name": "Source"})
+            source_val = source_input.get("value") if isinstance(source_input, Tag) else None
+            source = source_val if isinstance(source_val, str) else None
 
-        if not source or not rvt:
-            raise CannotConnect("Could not extract login tokens")
+            if not source or not rvt:
+                raise CannotConnect("Could not extract login tokens")
 
-        async with session.post(
-            f"{BASE_URL}/",
-            data={
-                "LoginFormData.UserName": self._username,
-                "LoginFormData.Password": self._password,
-                "rvt": rvt,
-                "Source": source,
-                "PotText": "",
-                "__EiTokPotText": "",
-                "ReturnUrl": "",
-                "AccountNumber": "",
-            },
-            timeout=timeout,
-        ) as res2:
-            res2.raise_for_status()
-            html2 = await res2.text()
+            async with session.post(
+                f"{BASE_URL}/",
+                data={
+                    "LoginFormData.UserName": self._username,
+                    "LoginFormData.Password": self._password,
+                    "rvt": rvt,
+                    "Source": source,
+                    "PotText": "",
+                    "__EiTokPotText": "",
+                    "ReturnUrl": "",
+                    "AccountNumber": "",
+                },
+                timeout=timeout,
+            ) as res2:
+                res2.raise_for_status()
+                html2 = await res2.text()
+
+        except (CannotConnect, AccountNotFound):
+            raise
+        except aiohttp.ClientError as err:
+            raise CannotConnect(str(err)) from err
+        except asyncio.TimeoutError:
+            raise CannotConnect("Connection timed out")
 
         soup2 = BeautifulSoup(html2, "html.parser")
         account_divs = soup2.find_all("div", {"class": "my-accounts__item"})
@@ -157,6 +165,8 @@ class ElectricIrelandAPI:
             try:
                 day_data = await client.get_data(target_date)
                 all_datapoints.extend(day_data)
+            except (CachedIdsInvalid, InvalidAuth):
+                raise
             except Exception as err:
                 LOGGER.warning("Failed to get data for %s: %s", target_date, err)
                 continue
@@ -214,6 +224,9 @@ class ElectricIrelandAPI:
                 if "modelData" not in html3:
                     LOGGER.warning(
                         "Cached IDs may be stale — OnEvent didn't return insights page"
+                    )
+                    raise CachedIdsInvalid(
+                        "Insights modelData missing from OnEvent response"
                     )
 
             LOGGER.debug(
@@ -281,7 +294,7 @@ class ElectricIrelandAPI:
                 )
                 if not account_number_el:
                     continue
-                account_number = account_number_el.text
+                account_number = account_number_el.text.strip()
                 if account_number != self._account_number:
                     LOGGER.debug(
                         "Skipping account %s as it is not target", account_number

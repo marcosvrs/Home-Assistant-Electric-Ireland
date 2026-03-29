@@ -24,6 +24,7 @@ from custom_components.electric_ireland_insights.api import (  # noqa: E402
 )
 from custom_components.electric_ireland_insights.exceptions import (  # noqa: E402
     AccountNotFound,
+    CachedIdsInvalid,
     CannotConnect,
     InvalidAuth,
 )
@@ -572,3 +573,76 @@ async def test_get_data_client_error() -> None:
             client = MeterInsightClient(session, meter_ids)
             result = await client.get_data(target_date)
     assert result == []
+
+
+@pytest.mark.asyncio
+async def test_fetch_day_range_propagates_cached_ids_invalid() -> None:
+    """CachedIdsInvalid from get_data must propagate, not be swallowed."""
+    api = ElectricIrelandAPI("user@test.com", "password", "951785073")
+    mock_client = _make_mock_client()
+    mock_client.get_data = AsyncMock(side_effect=CachedIdsInvalid("stale IDs"))
+
+    with patch.object(api, "_login", new_callable=AsyncMock, return_value=mock_client):
+        async with aiohttp.ClientSession() as session:
+            with pytest.raises(CachedIdsInvalid, match="stale IDs"):
+                await api.fetch_day_range(session, lookback_days=2)
+
+
+@pytest.mark.asyncio
+async def test_fetch_day_range_propagates_invalid_auth() -> None:
+    """InvalidAuth from get_data must propagate, not be swallowed."""
+    api = ElectricIrelandAPI("user@test.com", "password", "951785073")
+    mock_client = _make_mock_client()
+    mock_client.get_data = AsyncMock(side_effect=InvalidAuth("session expired"))
+
+    with patch.object(api, "_login", new_callable=AsyncMock, return_value=mock_client):
+        async with aiohttp.ClientSession() as session:
+            with pytest.raises(InvalidAuth, match="session expired"):
+                await api.fetch_day_range(session, lookback_days=2)
+
+
+@pytest.mark.asyncio
+async def test_fetch_day_range_transient_errors_still_swallowed() -> None:
+    """Generic exceptions (transient) should still be caught and skipped."""
+    api = ElectricIrelandAPI("user@test.com", "password", "951785073")
+    mock_client = _make_mock_client()
+    mock_client.get_data = AsyncMock(
+        side_effect=[
+            _make_day_data(1774224000),
+            RuntimeError("transient failure"),
+            _make_day_data(1774396800),
+        ]
+    )
+
+    with patch.object(api, "_login", new_callable=AsyncMock, return_value=mock_client):
+        async with aiohttp.ClientSession() as session:
+            result, _ = await api.fetch_day_range(session, lookback_days=3)
+
+    assert len(result) == 48
+    assert mock_client.get_data.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_discover_accounts_wraps_aiohttp_client_error() -> None:
+    """aiohttp.ClientError in discover_accounts must become CannotConnect."""
+    api = ElectricIrelandAPI("user@test.com", "password")
+
+    with aioresponses_mock() as m:
+        m.get(f"{BASE_URL}/", exception=aiohttp.ClientError("network down"))
+        async with aiohttp.ClientSession() as session:
+            with pytest.raises(CannotConnect):
+                await api.discover_accounts(session)
+
+
+@pytest.mark.asyncio
+async def test_discover_accounts_wraps_timeout() -> None:
+    """asyncio.TimeoutError in discover_accounts must become CannotConnect."""
+    import asyncio
+
+    api = ElectricIrelandAPI("user@test.com", "password")
+
+    with aioresponses_mock() as m:
+        m.get(f"{BASE_URL}/", exception=asyncio.TimeoutError())
+        async with aiohttp.ClientSession() as session:
+            with pytest.raises(CannotConnect):
+                await api.discover_accounts(session)

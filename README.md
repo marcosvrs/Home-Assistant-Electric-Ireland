@@ -90,7 +90,7 @@ Every hour:
 * Both consumption and cost are returned in the same response, with 24 hourly datapoints per day.
 * Data is timestamped at the end of each hourly interval (e.g., `00:59:59` for the midnight hour) and normalized to the hour start for statistics alignment.
 
-## Breaking Changes in v0.3.0
+## Breaking Changes in v0.4.0
 
 This is a **major architectural change**. If you are upgrading from v0.2.x:
 
@@ -104,5 +104,5 @@ This is a **major architectural change**. If you are upgrading from v0.2.x:
 
 ## Acknowledgements
 
-* [Opower integration](https://github.com/home-assistant/core/tree/dev/homeassistant/components/opower): served as the architectural reference for the external statistics and coordinator pattern used in v0.3.0.
+* [Opower integration](https://github.com/home-assistant/core/tree/dev/homeassistant/components/opower): served as the architectural reference for the external statistics and coordinator pattern used in v0.4.0.
 
