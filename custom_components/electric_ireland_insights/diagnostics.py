@@ -1,4 +1,3 @@
-# pyright: reportMissingImports=false
 """Diagnostics support for Electric Ireland Insights."""
 from __future__ import annotations
 

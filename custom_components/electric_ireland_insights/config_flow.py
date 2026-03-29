@@ -39,7 +39,7 @@ STEP_RECONFIGURE_DATA_SCHEMA = vol.Schema(
 )
 
 
-class ElectricIrelandInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class ElectricIrelandInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg,misc]
     """Handle a config flow for Electric Ireland Insights."""
 
     VERSION = 2

@@ -1,12 +1,15 @@
+from __future__ import annotations
+
 import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 
 import aiohttp
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 from .const import DOMAIN
 from .exceptions import AccountNotFound, CachedIdsInvalid, CannotConnect, InvalidAuth
+from .types import ElectricIrelandDatapoint, MeterIds
 
 LOGGER = logging.getLogger(DOMAIN)
 
@@ -20,7 +23,7 @@ class ElectricIrelandAPI:
         self._password = password
         self._account_number = account_number
 
-    async def validate_credentials(self, session: aiohttp.ClientSession) -> dict:
+    async def validate_credentials(self, session: aiohttp.ClientSession) -> MeterIds:
         client = await self._login(session)
         return {
             "partner": client._partner,
@@ -32,9 +35,9 @@ class ElectricIrelandAPI:
         self,
         session: aiohttp.ClientSession,
         lookback_days: int,
-        meter_ids: dict | None = None,
-    ) -> tuple[list[dict], dict | None]:
-        discovered_ids: dict | None = None
+        meter_ids: MeterIds | None = None,
+    ) -> tuple[list[ElectricIrelandDatapoint], MeterIds | None]:
+        discovered_ids: MeterIds | None = None
 
         if meter_ids is not None:
             LOGGER.debug("Using cached meter IDs — skipping HTML discovery")
@@ -64,7 +67,7 @@ class ElectricIrelandAPI:
             days=1
         )
 
-        all_datapoints: list[dict] = []
+        all_datapoints: list[ElectricIrelandDatapoint] = []
         for i in range(lookback_days, 0, -1):
             target_date = yesterday - timedelta(days=i - 1)
             try:
@@ -77,8 +80,8 @@ class ElectricIrelandAPI:
         return all_datapoints, discovered_ids
 
     async def _login_cached(
-        self, session: aiohttp.ClientSession, meter_ids: dict
-    ) -> "MeterInsightClient":
+        self, session: aiohttp.ClientSession, meter_ids: MeterIds
+    ) -> MeterInsightClient:
         timeout = aiohttp.ClientTimeout(total=30)
 
         try:
@@ -91,7 +94,8 @@ class ElectricIrelandAPI:
 
             soup1 = BeautifulSoup(html1, "html.parser")
             source_input = soup1.find("input", attrs={"name": "Source"})
-            source = source_input.get("value") if source_input else None
+            source_val = source_input.get("value") if isinstance(source_input, Tag) else None
+            source = source_val if isinstance(source_val, str) else None
 
             if not source or not rvt:
                 raise CachedIdsInvalid(
@@ -146,7 +150,7 @@ class ElectricIrelandAPI:
         except asyncio.TimeoutError:
             raise CachedIdsInvalid("Timeout during cached login")
 
-    async def _login(self, session: aiohttp.ClientSession) -> "MeterInsightClient":
+    async def _login(self, session: aiohttp.ClientSession) -> MeterInsightClient:
         timeout = aiohttp.ClientTimeout(total=30)
 
         try:
@@ -162,7 +166,8 @@ class ElectricIrelandAPI:
 
             soup1 = BeautifulSoup(html1, "html.parser")
             source_input = soup1.find("input", attrs={"name": "Source"})
-            source = source_input.get("value") if source_input else None
+            source_val = source_input.get("value") if isinstance(source_input, Tag) else None
+            source = source_val if isinstance(source_val, str) else None
 
             if not source or not rvt:
                 raise CannotConnect("Could not extract login tokens")
@@ -244,6 +249,8 @@ class ElectricIrelandAPI:
                     "Login succeeded but insights page not accessible"
                 )
 
+            assert isinstance(model_data, Tag)
+
             partner = model_data.get("data-partner")
             contract = model_data.get("data-contract")
             premise = model_data.get("data-premise")
@@ -252,6 +259,10 @@ class ElectricIrelandAPI:
                 raise InvalidAuth(
                     "Login succeeded but insights page not accessible"
                 )
+
+            assert isinstance(partner, str)
+            assert isinstance(contract, str)
+            assert isinstance(premise, str)
 
             LOGGER.info(
                 "Found meter IDs: partner=%s, contract=%s, premise=%s",
@@ -273,13 +284,13 @@ class ElectricIrelandAPI:
 
 class MeterInsightClient:
 
-    def __init__(self, session: aiohttp.ClientSession, meter_ids: dict) -> None:
+    def __init__(self, session: aiohttp.ClientSession, meter_ids: MeterIds) -> None:
         self._session = session
         self._partner = meter_ids["partner"]
         self._contract = meter_ids["contract"]
         self._premise = meter_ids["premise"]
 
-    async def get_data(self, target_date: datetime) -> list[dict]:
+    async def get_data(self, target_date: datetime) -> list[ElectricIrelandDatapoint]:
         date_str = target_date.strftime("%Y-%m-%d")
         LOGGER.debug("Getting hourly data for %s...", date_str)
 
@@ -332,7 +343,7 @@ class MeterInsightClient:
         raw_datapoints = data.get("data", [])
         LOGGER.debug("Found %d hourly datapoints for %s", len(raw_datapoints), date_str)
 
-        datapoints: list[dict] = []
+        datapoints: list[ElectricIrelandDatapoint] = []
         usage_tariff_keys = ("flatRate", "offPeak", "midPeak", "onPeak")
 
         for dp in raw_datapoints:

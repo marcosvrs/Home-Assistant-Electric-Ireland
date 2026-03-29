@@ -20,13 +20,14 @@ from homeassistant.util.dt import utcnow
 
 from .const import DOMAIN
 from .coordinator import ElectricIrelandCoordinator
+from .types import CoordinatorData
 
 PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
-class ElectricIrelandSensorDescription(SensorEntityDescription):
-    value_fn: Callable[[dict], datetime | float | None]
+class ElectricIrelandSensorDescription(SensorEntityDescription):  # type: ignore[misc]
+    value_fn: Callable[[CoordinatorData], datetime | float | None]
 
 
 DIAGNOSTIC_SENSORS: tuple[ElectricIrelandSensorDescription, ...] = (
@@ -47,7 +48,7 @@ DIAGNOSTIC_SENSORS: tuple[ElectricIrelandSensorDescription, ...] = (
 )
 
 
-def _calc_freshness(data: dict) -> float | None:
+def _calc_freshness(data: CoordinatorData) -> float | None:
     latest = data.get("latest_data_timestamp")
     if latest is None:
         return None
@@ -69,7 +70,7 @@ async def async_setup_entry(
     )
 
 
-class ElectricIrelandDiagnosticSensor(CoordinatorEntity, SensorEntity):
+class ElectricIrelandDiagnosticSensor(CoordinatorEntity, SensorEntity):  # type: ignore[misc]
     _attr_has_entity_name = True
 
     def __init__(

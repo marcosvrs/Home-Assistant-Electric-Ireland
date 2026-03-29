@@ -15,8 +15,25 @@ dev = [
   "pytest-asyncio",
   "pytest-cov",
   "aioresponses",
+  "mypy>=1.0",
+  "types-beautifulsoup4",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.mypy]
+strict = true
+warn_return_any = false
+
+[[tool.mypy.overrides]]
+module = [
+    "homeassistant.*",
+    "pytest_homeassistant_custom_component.*",
+    "bs4.*",
+    "voluptuous.*",
+    "aioresponses.*",
+    "aiohttp.*",
+]
+ignore_missing_imports = true

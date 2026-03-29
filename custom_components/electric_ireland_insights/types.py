@@ -1,0 +1,31 @@
+"""Type definitions for Electric Ireland Insights."""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import TypedDict
+
+
+class ElectricIrelandDatapoint(TypedDict):
+    """A single hourly datapoint from the Electric Ireland API."""
+
+    consumption: float
+    cost: float
+    intervalEnd: int
+
+
+class CoordinatorData(TypedDict):
+    """Data returned by the coordinator update."""
+
+    last_import: datetime | None
+    datapoint_count: int
+    latest_data_timestamp: datetime | None
+    import_error: str | None
+
+
+class MeterIds(TypedDict):
+    """Meter identification data."""
+
+    partner: str
+    contract: str
+    premise: str

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 import aiohttp
 
@@ -26,11 +27,12 @@ from homeassistant.util.unit_conversion import EnergyConverter
 from .api import ElectricIrelandAPI
 from .const import DOMAIN, INITIAL_LOOKBACK_DAYS, LOOKUP_DAYS, SCAN_INTERVAL
 from .exceptions import CannotConnect, InvalidAuth
+from .types import CoordinatorData, ElectricIrelandDatapoint, MeterIds
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class ElectricIrelandCoordinator(DataUpdateCoordinator):
+class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # type: ignore[misc]
     """Coordinator to fetch EI data and import external statistics."""
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
@@ -50,13 +52,13 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator):
         )
         self._last_update_success = True
 
-    async def _async_update_data(self) -> dict:
+    async def _async_update_data(self) -> CoordinatorData:
         session = async_create_clientsession(
             self.hass, cookie_jar=aiohttp.CookieJar()
         )
         was_successful = self._last_update_success
 
-        def _mark_success(result: dict) -> dict:
+        def _mark_success(result: CoordinatorData) -> CoordinatorData:
             self._last_update_success = True
             if not was_successful:
                 _LOGGER.info("Connection restored — data import resumed")
@@ -78,7 +80,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator):
                 self._has_imported_before = bool(existing)
 
             entry_data = self.config_entry.data
-            cached_ids: dict | None = None
+            cached_ids: MeterIds | None = None
             if (
                 entry_data.get("partner_id")
                 and entry_data.get("contract_id")
@@ -174,8 +176,8 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator):
 
     async def _insert_statistics(
         self,
-        datapoints: list[dict],
-        metric: str,
+        datapoints: list[ElectricIrelandDatapoint],
+        metric: Literal["consumption", "cost"],
         statistic_id: str,
         unit: str,
         unit_class: str | None,
