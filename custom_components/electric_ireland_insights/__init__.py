@@ -6,7 +6,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.typing import ConfigType
+import homeassistant.helpers.config_validation as cv
 
 from .const import DOMAIN
 from .coordinator import ElectricIrelandCoordinator
@@ -15,11 +15,9 @@ _LOGGER = logging.getLogger(DOMAIN)
 
 PLATFORMS = [Platform.SENSOR]
 
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
 type ElectricIrelandConfigEntry = ConfigEntry[ElectricIrelandCoordinator]
-
-
-async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    return True
 
 
 async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:

@@ -10,7 +10,6 @@ import aiohttp
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
 from homeassistant.components.recorder.statistics import (
-    StatisticMeanType,
     async_add_external_statistics,
     get_last_statistics,
     statistics_during_period,
@@ -22,7 +21,6 @@ from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util.dt import utcnow
-from homeassistant.util.unit_conversion import EnergyConverter
 
 from .api import ElectricIrelandAPI
 from .const import DOMAIN, INITIAL_LOOKBACK_DAYS, LOOKUP_DAYS, SCAN_INTERVAL
@@ -136,14 +134,12 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
                 "consumption",
                 f"{DOMAIN}:{self._account}_consumption",
                 UnitOfEnergy.KILO_WATT_HOUR,
-                EnergyConverter.UNIT_CLASS,
             )
             await self._insert_statistics(
                 datapoints,
                 "cost",
                 f"{DOMAIN}:{self._account}_cost",
                 "EUR",
-                None,
             )
 
             last_ts = max((dp["intervalEnd"] for dp in datapoints), default=None)
@@ -181,7 +177,6 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
         metric: Literal["consumption", "cost"],
         statistic_id: str,
         unit: str,
-        unit_class: str | None,
     ) -> None:
         filtered = []
         for dp in datapoints:
@@ -231,12 +226,11 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
             )
 
         metadata = StatisticMetaData(
-            mean_type=StatisticMeanType.NONE,
+            has_mean=False,
             has_sum=True,
             name=f"Electric Ireland {'Consumption' if metric == 'consumption' else 'Cost'} ({self._account})",
             source=DOMAIN,
             statistic_id=statistic_id,
-            unit_class=unit_class,
             unit_of_measurement=unit,
         )
 
