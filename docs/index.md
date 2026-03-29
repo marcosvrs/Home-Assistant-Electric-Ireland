@@ -12,6 +12,7 @@ ha_domain: electric_ireland_insights
 ha_platforms:
   - sensor
 ha_integration_type: service
+ha_quality_scale: platinum
 ---
 
 # Electric Ireland Insights
