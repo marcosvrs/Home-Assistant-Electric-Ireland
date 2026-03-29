@@ -39,8 +39,8 @@ class ElectricIrelandAPI:
         async with session.get(f"{BASE_URL}/", timeout=timeout) as res1:
             res1.raise_for_status()
             html1 = await res1.text()
-            rvt = res1.cookies.get("rvt")
-            rvt = rvt.value if rvt else None
+            rvt_cookie = res1.cookies.get("rvt")
+            rvt = rvt_cookie.value if rvt_cookie else None
 
         soup1 = BeautifulSoup(html1, "html.parser")
         source_input = soup1.find("input", attrs={"name": "Source"})
@@ -50,7 +50,6 @@ class ElectricIrelandAPI:
         if not source or not rvt:
             raise CannotConnect("Could not extract login tokens")
 
-        # Step 2: POST login
         async with session.post(
             f"{BASE_URL}/",
             data={
@@ -173,9 +172,8 @@ class ElectricIrelandAPI:
             async with session.get(f"{BASE_URL}/", timeout=timeout) as res1:
                 res1.raise_for_status()
                 html1 = await res1.text()
-                rvt = res1.cookies.get("rvt")
-                if rvt:
-                    rvt = rvt.value
+                rvt_cookie = res1.cookies.get("rvt")
+                rvt = rvt_cookie.value if rvt_cookie else None
 
             soup1 = BeautifulSoup(html1, "html.parser")
             source_input = soup1.find("input", attrs={"name": "Source"})
@@ -245,9 +243,8 @@ class ElectricIrelandAPI:
             ) as res1:
                 res1.raise_for_status()
                 html1 = await res1.text()
-                rvt = res1.cookies.get("rvt")
-                if rvt:
-                    rvt = rvt.value
+                rvt_cookie = res1.cookies.get("rvt")
+                rvt = rvt_cookie.value if rvt_cookie else None
 
             soup1 = BeautifulSoup(html1, "html.parser")
             source_input = soup1.find("input", attrs={"name": "Source"})
@@ -365,8 +362,6 @@ class ElectricIrelandAPI:
             raise CannotConnect(str(err)) from err
         except asyncio.TimeoutError:
             raise CannotConnect("Connection timed out")
-
-
 
 
 class MeterInsightClient:

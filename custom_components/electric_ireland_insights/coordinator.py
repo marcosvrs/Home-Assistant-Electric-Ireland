@@ -32,7 +32,7 @@ from .types import CoordinatorData, ElectricIrelandDatapoint, MeterIds
 _LOGGER = logging.getLogger(__name__)
 
 
-class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # type: ignore[misc]
+class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # type: ignore[misc]  # DataUpdateCoordinator generic: HA typing incomplete
     """Coordinator to fetch EI data and import external statistics."""
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:

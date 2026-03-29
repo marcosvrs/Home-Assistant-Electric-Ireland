@@ -35,7 +35,8 @@ During setup you will be asked for:
 |-----------|-------------|
 | **Username** | Your Electric Ireland portal email address |
 | **Password** | Your Electric Ireland portal password |
-| **Account Number** | Your Electric Ireland account number (e.g. `951785073`) |
+
+If multiple electricity accounts are found for your login, you will be asked to select which account to configure.
 
 ## Removal
 
