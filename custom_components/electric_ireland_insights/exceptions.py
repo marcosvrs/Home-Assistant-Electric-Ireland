@@ -1,0 +1,13 @@
+"""Custom exceptions for Electric Ireland integration."""
+
+
+class InvalidAuth(Exception):
+    """Raised when authentication fails."""
+
+
+class CannotConnect(Exception):
+    """Raised when connection to Electric Ireland fails."""
+
+
+class AccountNotFound(Exception):
+    """Raised when the specified account number is not found."""
