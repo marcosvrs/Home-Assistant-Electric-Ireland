@@ -48,11 +48,20 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator):
             config_entry.data["password"],
             self._account,
         )
+        self._last_update_success = True
 
     async def _async_update_data(self) -> dict:
         session = async_create_clientsession(
             self.hass, cookie_jar=aiohttp.CookieJar()
         )
+        was_successful = self._last_update_success
+
+        def _mark_success(result: dict) -> dict:
+            self._last_update_success = True
+            if not was_successful:
+                _LOGGER.info("Connection restored — data import resumed")
+            return result
+
         try:
             stat_id = f"{DOMAIN}:{self._account}_consumption"
             existing = await self.hass.async_add_executor_job(
@@ -103,19 +112,19 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator):
             if not datapoints:
                 if self._has_imported_before:
                     if self.data is not None:
-                        return self.data
-                    return {
+                        return _mark_success(self.data)
+                    return _mark_success({
                         "last_import": None,
                         "datapoint_count": 0,
                         "latest_data_timestamp": None,
                         "import_error": "No new data available",
-                    }
-                return {
+                    })
+                return _mark_success({
                     "last_import": utcnow(),
                     "datapoint_count": 0,
                     "latest_data_timestamp": None,
                     "import_error": None,
-                }
+                })
 
             self._has_imported_before = True
 
@@ -135,22 +144,31 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator):
             )
 
             last_ts = max((dp["intervalEnd"] for dp in datapoints), default=None)
-            return {
+            return _mark_success({
                 "last_import": utcnow(),
                 "datapoint_count": len(datapoints),
                 "latest_data_timestamp": (
                     datetime.fromtimestamp(last_ts, tz=UTC) if last_ts else None
                 ),
                 "import_error": None,
-            }
+            })
 
         except InvalidAuth as err:
+            self._last_update_success = False
             raise ConfigEntryAuthFailed from err
         except CannotConnect as err:
+            if was_successful:
+                _LOGGER.warning(
+                    "Connection lost — data import paused: %s",
+                    err,
+                )
+            self._last_update_success = False
             raise UpdateFailed(f"Connection error: {err}") from err
         except (ConfigEntryAuthFailed, UpdateFailed):
+            self._last_update_success = False
             raise
         except Exception as err:
+            self._last_update_success = False
             _LOGGER.exception("Unexpected error during update")
             raise UpdateFailed(f"Unexpected error: {err}") from err
 
