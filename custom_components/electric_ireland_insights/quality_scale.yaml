@@ -1,0 +1,49 @@
+rules:
+  action-setup:
+    status: exempt
+    comment: Integration uses coordinator, no custom actions needed.
+  appropriate-polling:
+    status: done
+    comment: Polls hourly via DataUpdateCoordinator. Reduced from 30-day to 7-day lookback.
+  brands: todo
+  common-modules:
+    status: done
+    comment: Uses coordinator, config_flow, and sensor platform.
+  config-flow:
+    status: done
+    comment: Full config flow with credential validation and reauth.
+  config-flow-test-coverage:
+    status: done
+    comment: 7 config flow tests covering success, all error paths, duplicate, and reauth.
+  dependency-transparency:
+    status: done
+    comment: beautifulsoup4 is the only pip dependency. HA-provided aiohttp is used for HTTP.
+  diagnostic-entities: todo
+  diagnostics:
+    status: done
+    comment: diagnostics.py implemented with credential redaction.
+  discovery: exempt
+  docs-installation: todo
+  entity-unique-id:
+    status: done
+    comment: Diagnostic entities use unique_id based on domain + account + key.
+  has-entity-name:
+    status: done
+    comment: Uses _attr_has_entity_name = True with translation_key.
+  integration-owner:
+    status: todo
+    comment: Needs core HA codeowners assignment.
+  reconfiguration-flow: todo
+  reauthentication-flow:
+    status: done
+    comment: async_step_reauth + async_step_reauth_confirm implemented.
+  runtime-data:
+    status: done
+    comment: Uses entry.runtime_data = coordinator (modern HA pattern).
+  strict-typing: todo
+  test-before-setup:
+    status: done
+    comment: Validates credentials via ElectricIrelandAPI.validate_credentials() before creating entry.
+  unique-config-entry:
+    status: done
+    comment: Uses async_set_unique_id(account_number) + _abort_if_unique_id_configured().
