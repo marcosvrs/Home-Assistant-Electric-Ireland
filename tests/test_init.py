@@ -8,7 +8,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from custom_components.electric_ireland_insights.const import DOMAIN
 
 
-async def test_setup_entry_success(hass, enable_custom_integrations, mock_config_entry):
+async def test_setup_entry_success(recorder_mock, hass, enable_custom_integrations, mock_config_entry):
     mock_config_entry.add_to_hass(hass)
     with patch(
         "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
@@ -19,7 +19,7 @@ async def test_setup_entry_success(hass, enable_custom_integrations, mock_config
         return_value={},
     ):
         mock_api_instance = AsyncMock()
-        mock_api_instance.fetch_day_range = AsyncMock(return_value=[])
+        mock_api_instance.fetch_day_range = AsyncMock(return_value=([], None))
         mock_api_class.return_value = mock_api_instance
 
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
@@ -28,7 +28,7 @@ async def test_setup_entry_success(hass, enable_custom_integrations, mock_config
         assert mock_config_entry.state == ConfigEntryState.LOADED
 
 
-async def test_setup_entry_config_entry_not_ready(hass, enable_custom_integrations, mock_config_entry):
+async def test_setup_entry_config_entry_not_ready(recorder_mock, hass, enable_custom_integrations, mock_config_entry):
     mock_config_entry.add_to_hass(hass)
     with patch(
         "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
@@ -49,7 +49,7 @@ async def test_setup_entry_config_entry_not_ready(hass, enable_custom_integratio
         assert mock_config_entry.state == ConfigEntryState.SETUP_RETRY
 
 
-async def test_unload_entry(hass, enable_custom_integrations, mock_config_entry):
+async def test_unload_entry(recorder_mock, hass, enable_custom_integrations, mock_config_entry):
     mock_config_entry.add_to_hass(hass)
     with patch(
         "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
@@ -60,7 +60,7 @@ async def test_unload_entry(hass, enable_custom_integrations, mock_config_entry)
         return_value={},
     ):
         mock_api_instance = AsyncMock()
-        mock_api_instance.fetch_day_range = AsyncMock(return_value=[])
+        mock_api_instance.fetch_day_range = AsyncMock(return_value=([], None))
         mock_api_class.return_value = mock_api_instance
 
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
@@ -74,7 +74,7 @@ async def test_unload_entry(hass, enable_custom_integrations, mock_config_entry)
         assert mock_config_entry.state == ConfigEntryState.NOT_LOADED
 
 
-async def test_migrate_v1_to_v2(hass, enable_custom_integrations):
+async def test_migrate_v1_to_v2(recorder_mock, hass, enable_custom_integrations):
     """Test migration from V1 (no cached IDs) to V2 (with None cached IDs)."""
     from pytest_homeassistant_custom_component.common import MockConfigEntry
     from custom_components.electric_ireland_insights.const import DOMAIN

@@ -3,7 +3,7 @@
   "name": "Electric Ireland Insights",
   "codeowners": ["@barreeeiroo"],
   "config_flow": true,
-  "dependencies": [],
+  "dependencies": ["recorder"],
   "documentation": "https://www.home-assistant.io/integrations/electric_ireland_insights",
   "integration_type": "service",
   "iot_class": "cloud_polling",

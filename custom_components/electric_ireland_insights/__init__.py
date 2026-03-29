@@ -22,6 +22,24 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
+async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> bool:
+    _LOGGER.debug(
+        "Migrating Electric Ireland entry from version %s to 2",
+        config_entry.version,
+    )
+    if config_entry.version < 2:
+        new_data = {
+            **dict(config_entry.data),
+            "partner_id": None,
+            "contract_id": None,
+            "premise_id": None,
+        }
+        hass.config_entries.async_update_entry(
+            config_entry, data=new_data, version=2
+        )
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ElectricIrelandConfigEntry) -> bool:
     coordinator = ElectricIrelandCoordinator(hass, entry)
 

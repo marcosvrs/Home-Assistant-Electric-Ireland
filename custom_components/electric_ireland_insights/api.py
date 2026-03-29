@@ -6,7 +6,7 @@ import aiohttp
 from bs4 import BeautifulSoup
 
 from .const import DOMAIN
-from .exceptions import AccountNotFound, CannotConnect, InvalidAuth
+from .exceptions import AccountNotFound, CachedIdsInvalid, CannotConnect, InvalidAuth
 
 LOGGER = logging.getLogger(DOMAIN)
 
@@ -29,9 +29,36 @@ class ElectricIrelandAPI:
         }
 
     async def fetch_day_range(
-        self, session: aiohttp.ClientSession, lookback_days: int
-    ) -> list[dict]:
-        client = await self._login(session)
+        self,
+        session: aiohttp.ClientSession,
+        lookback_days: int,
+        meter_ids: dict | None = None,
+    ) -> tuple[list[dict], dict | None]:
+        discovered_ids: dict | None = None
+
+        if meter_ids is not None:
+            LOGGER.debug("Using cached meter IDs — skipping HTML discovery")
+            try:
+                client = await self._login_cached(session, meter_ids)
+            except CachedIdsInvalid as err:
+                LOGGER.warning(
+                    "Cached IDs failed (%s), falling back to full login", err
+                )
+                client = await self._login(session)
+                discovered_ids = {
+                    "partner": client._partner,
+                    "contract": client._contract,
+                    "premise": client._premise,
+                }
+        else:
+            LOGGER.info("Discovering meter IDs via full login")
+            client = await self._login(session)
+            discovered_ids = {
+                "partner": client._partner,
+                "contract": client._contract,
+                "premise": client._premise,
+            }
+
         now = datetime.now(UTC)
         yesterday = datetime(now.year, now.month, now.day, tzinfo=UTC) - timedelta(
             days=1
@@ -47,7 +74,77 @@ class ElectricIrelandAPI:
                 LOGGER.warning("Failed to get data for %s: %s", target_date, err)
                 continue
 
-        return all_datapoints
+        return all_datapoints, discovered_ids
+
+    async def _login_cached(
+        self, session: aiohttp.ClientSession, meter_ids: dict
+    ) -> "MeterInsightClient":
+        timeout = aiohttp.ClientTimeout(total=30)
+
+        try:
+            async with session.get(f"{BASE_URL}/", timeout=timeout) as res1:
+                res1.raise_for_status()
+                html1 = await res1.text()
+                rvt = res1.cookies.get("rvt")
+                if rvt:
+                    rvt = rvt.value
+
+            soup1 = BeautifulSoup(html1, "html.parser")
+            source_input = soup1.find("input", attrs={"name": "Source"})
+            source = source_input.get("value") if source_input else None
+
+            if not source or not rvt:
+                raise CachedIdsInvalid(
+                    "Could not extract login tokens during cached login"
+                )
+
+            async with session.post(
+                f"{BASE_URL}/",
+                data={
+                    "LoginFormData.UserName": self._username,
+                    "LoginFormData.Password": self._password,
+                    "rvt": rvt,
+                    "Source": source,
+                    "PotText": "",
+                    "__EiTokPotText": "",
+                    "ReturnUrl": "",
+                    "AccountNumber": "",
+                },
+                timeout=timeout,
+            ) as res2:
+                res2.raise_for_status()
+
+            req3 = {
+                "triggers_event": "AccountSelection.ToInsights",
+                "AccountId": meter_ids.get("partner", ""),
+            }
+            async with session.post(
+                f"{BASE_URL}/Accounts/OnEvent",
+                data=req3,
+                timeout=timeout,
+            ) as res3:
+                html3 = await res3.text()
+                if "modelData" not in html3:
+                    LOGGER.warning(
+                        "Cached IDs may be stale — OnEvent didn't return insights page"
+                    )
+
+            LOGGER.debug(
+                "Cached login: partner=%s, contract=%s, premise=%s",
+                meter_ids.get("partner"),
+                meter_ids.get("contract"),
+                meter_ids.get("premise"),
+            )
+            return MeterInsightClient(session, meter_ids)
+
+        except (CachedIdsInvalid, InvalidAuth):
+            raise
+        except aiohttp.ClientError as err:
+            raise CachedIdsInvalid(
+                f"Network error during cached login: {err}"
+            ) from err
+        except asyncio.TimeoutError:
+            raise CachedIdsInvalid("Timeout during cached login")
 
     async def _login(self, session: aiohttp.ClientSession) -> "MeterInsightClient":
         timeout = aiohttp.ClientTimeout(total=30)
@@ -196,6 +293,9 @@ class MeterInsightClient:
             async with self._session.get(
                 url, params={"date": date_str}, timeout=timeout
             ) as response:
+                if response.status in (401, 403, 404):
+                    raise CachedIdsInvalid(f"API returned {response.status}")
+
                 response.raise_for_status()
 
                 content_type = response.headers.get("content-type", "")
@@ -206,7 +306,9 @@ class MeterInsightClient:
                         content_type,
                         body[:500],
                     )
-                    return []
+                    raise CachedIdsInvalid(
+                        "Non-JSON response from MeterInsight API — session may be expired"
+                    )
 
                 try:
                     data = await response.json()
@@ -217,6 +319,8 @@ class MeterInsightClient:
                     )
                     return []
 
+        except CachedIdsInvalid:
+            raise
         except aiohttp.ClientError as err:
             LOGGER.error("Failed to get hourly usage data: %s", err)
             return []

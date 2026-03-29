@@ -114,7 +114,7 @@ async def test_fetch_day_range_success() -> None:
 
     with patch.object(api, "_login", new_callable=AsyncMock, return_value=mock_client):
         async with aiohttp.ClientSession() as session:
-            result = await api.fetch_day_range(session, lookback_days=3)
+            result, discovered_ids = await api.fetch_day_range(session, lookback_days=3)
 
     assert len(result) == 72
     assert mock_client.get_data.call_count == 3
@@ -135,7 +135,7 @@ async def test_fetch_day_range_partial_failure() -> None:
 
     with patch.object(api, "_login", new_callable=AsyncMock, return_value=mock_client):
         async with aiohttp.ClientSession() as session:
-            result = await api.fetch_day_range(session, lookback_days=3)
+            result, discovered_ids = await api.fetch_day_range(session, lookback_days=3)
 
     assert len(result) == 48
     assert mock_client.get_data.call_count == 3

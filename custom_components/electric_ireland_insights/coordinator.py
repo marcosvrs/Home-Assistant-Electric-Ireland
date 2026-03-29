@@ -65,25 +65,74 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator):
             )
             lookback = LOOKUP_DAYS if existing else INITIAL_LOOKBACK_DAYS
 
-            datapoints = await self._api.fetch_day_range(
-                session, lookback_days=lookback
+            if not hasattr(self, "_has_imported_before"):
+                self._has_imported_before = bool(existing)
+
+            entry_data = self.config_entry.data
+            cached_ids: dict | None = None
+            if (
+                entry_data.get("partner_id")
+                and entry_data.get("contract_id")
+                and entry_data.get("premise_id")
+            ):
+                cached_ids = {
+                    "partner": entry_data["partner_id"],
+                    "contract": entry_data["contract_id"],
+                    "premise": entry_data["premise_id"],
+                }
+
+            datapoints, new_meter_ids = await self._api.fetch_day_range(
+                session, lookback_days=lookback, meter_ids=cached_ids
             )
 
-            if datapoints:
-                await self._insert_statistics(
-                    datapoints,
-                    "consumption",
-                    f"{DOMAIN}:{self._account}_consumption",
-                    UnitOfEnergy.KILO_WATT_HOUR,
-                    EnergyConverter.UNIT_CLASS,
+            if new_meter_ids is not None:
+                new_data = {
+                    **dict(self.config_entry.data),
+                    "partner_id": new_meter_ids["partner"],
+                    "contract_id": new_meter_ids["contract"],
+                    "premise_id": new_meter_ids["premise"],
+                }
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry, data=new_data
                 )
-                await self._insert_statistics(
-                    datapoints,
-                    "cost",
-                    f"{DOMAIN}:{self._account}_cost",
-                    "EUR",
-                    None,
+                _LOGGER.debug(
+                    "Updated cached meter IDs: partner=%s",
+                    new_meter_ids["partner"],
                 )
+
+            if not datapoints:
+                if self._has_imported_before:
+                    if self.data is not None:
+                        return self.data
+                    return {
+                        "last_import": None,
+                        "datapoint_count": 0,
+                        "latest_data_timestamp": None,
+                        "import_error": "No new data available",
+                    }
+                return {
+                    "last_import": utcnow(),
+                    "datapoint_count": 0,
+                    "latest_data_timestamp": None,
+                    "import_error": None,
+                }
+
+            self._has_imported_before = True
+
+            await self._insert_statistics(
+                datapoints,
+                "consumption",
+                f"{DOMAIN}:{self._account}_consumption",
+                UnitOfEnergy.KILO_WATT_HOUR,
+                EnergyConverter.UNIT_CLASS,
+            )
+            await self._insert_statistics(
+                datapoints,
+                "cost",
+                f"{DOMAIN}:{self._account}_cost",
+                "EUR",
+                None,
+            )
 
             last_ts = max((dp["intervalEnd"] for dp in datapoints), default=None)
             return {

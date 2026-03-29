@@ -11,3 +11,7 @@ class CannotConnect(Exception):
 
 class AccountNotFound(Exception):
     """Raised when the specified account number is not found."""
+
+
+class CachedIdsInvalid(Exception):
+    """Raised when cached meter IDs are no longer valid."""

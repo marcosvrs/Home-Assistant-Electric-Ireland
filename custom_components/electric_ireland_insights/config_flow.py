@@ -35,7 +35,7 @@ STEP_REAUTH_DATA_SCHEMA = vol.Schema(
 class ElectricIrelandInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Electric Ireland Insights."""
 
-    VERSION = 1
+    VERSION = 2
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -53,7 +53,7 @@ class ElectricIrelandInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN
                     user_input["password"],
                     user_input["account_number"],
                 )
-                await api.validate_credentials(session)
+                meter_ids = await api.validate_credentials(session)
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
             except CannotConnect:
@@ -68,7 +68,12 @@ class ElectricIrelandInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(
                     title=f"{NAME} ({user_input['account_number']})",
-                    data=user_input,
+                    data={
+                        **user_input,
+                        "partner_id": meter_ids.get("partner"),
+                        "contract_id": meter_ids.get("contract"),
+                        "premise_id": meter_ids.get("premise"),
+                    },
                 )
 
         return self.async_show_form(
@@ -101,7 +106,7 @@ class ElectricIrelandInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN
                     new_data["password"],
                     new_data["account_number"],
                 )
-                await api.validate_credentials(session)
+                meter_ids = await api.validate_credentials(session)
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
             except CannotConnect:
@@ -116,7 +121,12 @@ class ElectricIrelandInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN
                 self._abort_if_unique_id_mismatch()
                 return self.async_update_reload_and_abort(
                     reauth_entry,
-                    data=new_data,
+                    data={
+                        **new_data,
+                        "partner_id": meter_ids.get("partner"),
+                        "contract_id": meter_ids.get("contract"),
+                        "premise_id": meter_ids.get("premise"),
+                    },
                 )
 
         return self.async_show_form(
