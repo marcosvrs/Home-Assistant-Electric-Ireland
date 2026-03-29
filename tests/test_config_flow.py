@@ -186,3 +186,36 @@ async def test_reauth_flow_invalid_auth(hass, enable_custom_integrations, mock_c
         )
         assert result2["type"] == FlowResultType.FORM
         assert result2["errors"]["base"] == "invalid_auth"
+
+
+async def test_ids_cached_during_config_flow(hass, enable_custom_integrations):
+    """Test that meter IDs discovered during config flow are stored in entry data."""
+    from homeassistant import config_entries
+    from homeassistant.data_entry_flow import FlowResultType
+    from unittest.mock import AsyncMock, patch
+
+    meter_ids = {"partner": "P_TEST", "contract": "C_TEST", "premise": "PR_TEST"}
+
+    with patch(
+        "custom_components.electric_ireland_insights.config_flow.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.config_flow.async_create_clientsession"
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.validate_credentials = AsyncMock(return_value=meter_ids)
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.const import DOMAIN
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"username": "test@test.com", "password": "testpass", "account_number": "951785073"},
+        )
+
+    assert result2["type"] == FlowResultType.CREATE_ENTRY
+    assert result2["data"].get("partner_id") == "P_TEST", \
+        "partner_id should be stored in entry data after successful config flow"
+    assert result2["data"].get("contract_id") == "C_TEST"
+    assert result2["data"].get("premise_id") == "PR_TEST"

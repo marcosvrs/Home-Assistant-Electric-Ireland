@@ -546,3 +546,241 @@ async def test_imports_continue_without_entity_listeners(
         mock_api_instance.fetch_day_range.assert_called()
 
         unsub()
+
+
+# ===========================================================================
+# SCRAPE-ONCE + SILENT FAILURE TESTS (T5 RED PHASE)
+# ===========================================================================
+
+
+async def test_cached_ids_skip_html_discovery(recorder_mock, hass, mock_config_entry):
+    """Test that cached meter IDs skip HTML discovery but still log in."""
+    mock_config_entry._data = {
+        **mock_config_entry.data,
+        "partner_id": "P1",
+        "contract_id": "C1",
+        "premise_id": "PR1",
+    }
+    mock_config_entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+        return_value={},
+    ), patch(
+        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.fetch_day_range = AsyncMock(
+            return_value=(make_datapoints(7), None)
+        )
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import (
+            ElectricIrelandCoordinator,
+        )
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+        await coordinator._async_update_data()
+
+        call_kwargs = mock_api_instance.fetch_day_range.call_args
+        assert call_kwargs.kwargs.get("meter_ids") is not None or (
+            len(call_kwargs.args) >= 3 and call_kwargs.args[2] is not None
+        ), "fetch_day_range should be called with cached meter_ids"
+
+
+async def test_no_cached_ids_triggers_full_login(recorder_mock, hass, mock_config_entry):
+    """Test that missing cached IDs trigger full login with HTML discovery."""
+    mock_config_entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+        return_value={},
+    ), patch(
+        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.fetch_day_range = AsyncMock(
+            return_value=(make_datapoints(30), {"partner": "P1", "contract": "C1", "premise": "PR1"})
+        )
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import (
+            ElectricIrelandCoordinator,
+        )
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+        await coordinator._async_update_data()
+
+        call_kwargs = mock_api_instance.fetch_day_range.call_args
+        passed_meter_ids = call_kwargs.kwargs.get("meter_ids")
+        assert passed_meter_ids is None, "No cached IDs: fetch_day_range should be called with meter_ids=None"
+
+
+async def test_cached_ids_fallback_to_full_login(recorder_mock, hass, mock_config_entry):
+    """Test that cached ID failure falls back to full login within same cycle."""
+    mock_config_entry._data = {
+        **mock_config_entry.data,
+        "partner_id": "STALE_P1",
+        "contract_id": "STALE_C1",
+        "premise_id": "STALE_PR1",
+    }
+    mock_config_entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+        return_value={},
+    ), patch(
+        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.fetch_day_range = AsyncMock(
+            return_value=(make_datapoints(7), {"partner": "NEW_P1", "contract": "NEW_C1", "premise": "NEW_PR1"})
+        )
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import (
+            ElectricIrelandCoordinator,
+        )
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+        result = await coordinator._async_update_data()
+
+        assert hass.config_entries.async_get_entry(mock_config_entry.entry_id).data.get("partner_id") == "NEW_P1", \
+            "New meter IDs from fallback should be stored in entry.data"
+
+
+async def test_fallback_updates_cached_ids(recorder_mock, hass, mock_config_entry):
+    """Test that fallback discovery updates cached IDs in entry.data."""
+    mock_config_entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+        return_value={},
+    ), patch(
+        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    ):
+        mock_api_instance = AsyncMock()
+        new_ids = {"partner": "P_NEW", "contract": "C_NEW", "premise": "PR_NEW"}
+        mock_api_instance.fetch_day_range = AsyncMock(
+            return_value=(make_datapoints(30), new_ids)
+        )
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import (
+            ElectricIrelandCoordinator,
+        )
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+        await coordinator._async_update_data()
+
+        entry = hass.config_entries.async_get_entry(mock_config_entry.entry_id)
+        assert entry.data.get("partner_id") == "P_NEW"
+        assert entry.data.get("contract_id") == "C_NEW"
+        assert entry.data.get("premise_id") == "PR_NEW"
+
+
+async def test_api_redirect_clears_and_falls_back(recorder_mock, hass, mock_config_entry):
+    """Test that a redirect-to-login response causes fallback to full login."""
+    from custom_components.electric_ireland_insights.exceptions import CachedIdsInvalid
+    mock_config_entry._data = {
+        **mock_config_entry.data,
+        "partner_id": "P1",
+        "contract_id": "C1",
+        "premise_id": "PR1",
+    }
+    mock_config_entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+        return_value={},
+    ), patch(
+        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.fetch_day_range = AsyncMock(
+            return_value=(make_datapoints(7), {"partner": "P2", "contract": "C2", "premise": "PR2"})
+        )
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import (
+            ElectricIrelandCoordinator,
+        )
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+        result = await coordinator._async_update_data()
+        assert result is not None
+
+
+async def test_empty_data_subsequent_run_no_update(recorder_mock, hass, mock_config_entry):
+    """Test that empty data on subsequent runs doesn't update last_import."""
+    mock_config_entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+        return_value={"some_stat": [{"sum": 100.0}]},
+    ), patch(
+        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.fetch_day_range = AsyncMock(
+            return_value=([], None)
+        )
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import (
+            ElectricIrelandCoordinator,
+        )
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+
+        from datetime import datetime as dt, timezone
+        coordinator.data = {
+            "last_import": dt(2026, 3, 28, 12, 0, tzinfo=timezone.utc),
+            "datapoint_count": 24,
+            "latest_data_timestamp": dt(2026, 3, 26, 0, 0, tzinfo=timezone.utc),
+            "import_error": None,
+        }
+        coordinator._has_imported_before = True
+
+        result = await coordinator._async_update_data()
+
+        assert result["last_import"] == dt(2026, 3, 28, 12, 0, tzinfo=timezone.utc), \
+            "Empty subsequent run should not update last_import"
+
+
+async def test_empty_data_restart_returns_synthetic(recorder_mock, hass, mock_config_entry):
+    """Test empty data after restart returns synthetic stale dict when _has_imported_before is True."""
+    mock_config_entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+        return_value={"some_stat": [{"sum": 100.0}]},
+    ), patch(
+        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.fetch_day_range = AsyncMock(
+            return_value=([], None)
+        )
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import (
+            ElectricIrelandCoordinator,
+        )
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+        assert coordinator.data is None
+
+        result = await coordinator._async_update_data()
+
+        assert result is not None
+        assert result.get("last_import") is None
+        assert result.get("datapoint_count") == 0
+        assert result.get("import_error") is not None
