@@ -26,7 +26,7 @@ PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
-class ElectricIrelandSensorDescription(SensorEntityDescription):  # type: ignore[misc]
+class ElectricIrelandSensorDescription(SensorEntityDescription):  # type: ignore[misc]  # SensorEntityDescription subclass: HA dataclass typing incomplete
     value_fn: Callable[[CoordinatorData], datetime | float | None]
 
 
@@ -70,7 +70,7 @@ async def async_setup_entry(
     )
 
 
-class ElectricIrelandDiagnosticSensor(CoordinatorEntity, SensorEntity):  # type: ignore[misc]
+class ElectricIrelandDiagnosticSensor(CoordinatorEntity, SensorEntity):  # type: ignore[misc]  # CoordinatorEntity+SensorEntity multiple inheritance: HA typing incomplete
     _attr_has_entity_name = True
 
     def __init__(

@@ -51,6 +51,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
             self._account,
         )
         self._last_update_success = True
+        self._has_imported_before = False
 
     async def _async_update_data(self) -> CoordinatorData:
         session = async_create_clientsession(
