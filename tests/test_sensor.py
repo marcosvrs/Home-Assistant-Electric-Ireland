@@ -109,3 +109,31 @@ async def test_has_entity_name_is_true(hass, enable_custom_integrations, mock_co
     last_import_desc = next(d for d in DIAGNOSTIC_SENSORS if d.key == "last_import_time")
     sensor = ElectricIrelandDiagnosticSensor(mock_coordinator, last_import_desc, "951785073")
     assert sensor._attr_has_entity_name is True
+
+
+async def test_data_freshness_with_valid_timestamp(hass, enable_custom_integrations, mock_config_entry):
+    """Test data_freshness_days returns a float when latest_data_timestamp is set."""
+    from datetime import timedelta
+    mock_config_entry.add_to_hass(hass)
+    mock_coordinator = MagicMock(spec=ElectricIrelandCoordinator)
+    two_days_ago = datetime(2026, 3, 21, 12, 0, 0, tzinfo=UTC) 
+    mock_coordinator.data = {
+        "last_import": datetime(2026, 3, 23, 12, 0, 0, tzinfo=UTC),
+        "datapoint_count": 24,
+        "latest_data_timestamp": two_days_ago,
+        "import_error": None,
+    }
+    mock_coordinator.hass = hass
+    mock_coordinator.config_entry = mock_config_entry
+
+    freshness_desc = next(d for d in DIAGNOSTIC_SENSORS if d.key == "data_freshness_days")
+    sensor = ElectricIrelandDiagnosticSensor(mock_coordinator, freshness_desc, "951785073")
+
+    from unittest.mock import patch as _patch
+    from homeassistant.util.dt import utcnow as _utcnow
+    fixed_now = datetime(2026, 3, 23, 12, 0, 0, tzinfo=UTC)
+    with _patch("custom_components.electric_ireland_insights.sensor.utcnow", return_value=fixed_now):
+        value = sensor.native_value
+
+    assert isinstance(value, float)
+    assert value >= 0.0

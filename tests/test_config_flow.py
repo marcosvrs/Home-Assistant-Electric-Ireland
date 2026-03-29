@@ -367,3 +367,209 @@ async def test_reconfigure_auth_error(recorder_mock, hass, enable_custom_integra
         )
         assert result2["type"] == FlowResultType.FORM
         assert result2["errors"]["base"] == "invalid_auth"
+
+
+async def test_user_flow_unexpected_exception(recorder_mock, hass, enable_custom_integrations):
+    """Test user flow shows error on unexpected exception."""
+    with patch(
+        "custom_components.electric_ireland_insights.config_flow.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.config_flow.async_create_clientsession"
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.validate_credentials = AsyncMock(side_effect=RuntimeError("boom"))
+        mock_api_class.return_value = mock_api_instance
+
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"username": "test@test.com", "password": "pass", "account_number": "123"},
+        )
+        assert result2["type"] == FlowResultType.FORM
+        assert result2["errors"]["base"] == "cannot_connect"
+
+
+async def test_reauth_cannot_connect(recorder_mock, hass, enable_custom_integrations, mock_config_entry):
+    """Test reauth flow shows error on connection failure."""
+    mock_config_entry.add_to_hass(hass)
+    with patch(
+        "custom_components.electric_ireland_insights.config_flow.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.config_flow.async_create_clientsession"
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.validate_credentials = AsyncMock(side_effect=CannotConnect)
+        mock_api_class.return_value = mock_api_instance
+
+        result = await mock_config_entry.start_reauth_flow(hass)
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"password": "pass"}
+        )
+        assert result2["type"] == FlowResultType.FORM
+        assert result2["errors"]["base"] == "cannot_connect"
+
+
+async def test_reauth_account_not_found(recorder_mock, hass, enable_custom_integrations, mock_config_entry):
+    """Test reauth flow shows error when account not found."""
+    mock_config_entry.add_to_hass(hass)
+    with patch(
+        "custom_components.electric_ireland_insights.config_flow.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.config_flow.async_create_clientsession"
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.validate_credentials = AsyncMock(side_effect=AccountNotFound)
+        mock_api_class.return_value = mock_api_instance
+
+        result = await mock_config_entry.start_reauth_flow(hass)
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"password": "pass"}
+        )
+        assert result2["type"] == FlowResultType.FORM
+        assert result2["errors"]["base"] == "account_not_found"
+
+
+async def test_reauth_unexpected_exception(recorder_mock, hass, enable_custom_integrations, mock_config_entry):
+    """Test reauth flow shows error on unexpected exception."""
+    mock_config_entry.add_to_hass(hass)
+    with patch(
+        "custom_components.electric_ireland_insights.config_flow.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.config_flow.async_create_clientsession"
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.validate_credentials = AsyncMock(side_effect=RuntimeError("boom"))
+        mock_api_class.return_value = mock_api_instance
+
+        result = await mock_config_entry.start_reauth_flow(hass)
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"password": "pass"}
+        )
+        assert result2["type"] == FlowResultType.FORM
+        assert result2["errors"]["base"] == "cannot_connect"
+
+
+async def test_reconfigure_cannot_connect(recorder_mock, hass, enable_custom_integrations):
+    """Test reconfigure flow shows error on connection failure."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"username": "test@test.com", "password": "testpass", "account_number": "951785073",
+              "partner_id": "p1", "contract_id": "c1", "premise_id": "pr1"},
+        unique_id="951785073",
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.electric_ireland_insights.config_flow.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.config_flow.async_create_clientsession"
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.validate_credentials = AsyncMock(side_effect=CannotConnect)
+        mock_api_class.return_value = mock_api_instance
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id}
+        )
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"password": "newpass", "force_rediscovery": False}
+        )
+        assert result2["type"] == FlowResultType.FORM
+        assert result2["errors"]["base"] == "cannot_connect"
+
+
+async def test_reconfigure_account_not_found(recorder_mock, hass, enable_custom_integrations):
+    """Test reconfigure flow shows error when account not found."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"username": "test@test.com", "password": "testpass", "account_number": "951785073",
+              "partner_id": "p1", "contract_id": "c1", "premise_id": "pr1"},
+        unique_id="951785073",
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.electric_ireland_insights.config_flow.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.config_flow.async_create_clientsession"
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.validate_credentials = AsyncMock(side_effect=AccountNotFound)
+        mock_api_class.return_value = mock_api_instance
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id}
+        )
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"password": "newpass", "force_rediscovery": False}
+        )
+        assert result2["type"] == FlowResultType.FORM
+        assert result2["errors"]["base"] == "account_not_found"
+
+
+async def test_reconfigure_unexpected_exception(recorder_mock, hass, enable_custom_integrations):
+    """Test reconfigure flow shows error on unexpected exception."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"username": "test@test.com", "password": "testpass", "account_number": "951785073",
+              "partner_id": "p1", "contract_id": "c1", "premise_id": "pr1"},
+        unique_id="951785073",
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.electric_ireland_insights.config_flow.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.config_flow.async_create_clientsession"
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.validate_credentials = AsyncMock(side_effect=RuntimeError("boom"))
+        mock_api_class.return_value = mock_api_instance
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id}
+        )
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"password": "newpass", "force_rediscovery": False}
+        )
+        assert result2["type"] == FlowResultType.FORM
+        assert result2["errors"]["base"] == "cannot_connect"
+
+
+async def test_reconfigure_same_password_stores_meter_ids(recorder_mock, hass, enable_custom_integrations):
+    """Test reconfigure with same password and no force_rediscovery stores fresh meter_ids."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"username": "test@test.com", "password": "testpass", "account_number": "951785073",
+              "partner_id": "p1", "contract_id": "c1", "premise_id": "pr1"},
+        unique_id="951785073",
+        version=2,
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.electric_ireland_insights.config_flow.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.config_flow.async_create_clientsession"
+    ), patch(
+        "custom_components.electric_ireland_insights.async_setup_entry",
+        return_value=True,
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.validate_credentials = AsyncMock(
+            return_value={"partner": "p_new", "contract": "c_new", "premise": "pr_new"}
+        )
+        mock_api_class.return_value = mock_api_instance
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_RECONFIGURE, "entry_id": entry.entry_id}
+        )
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"password": "testpass", "force_rediscovery": False},
+        )
+        assert result2["type"] == FlowResultType.ABORT
+        assert result2["reason"] == "reconfigure_successful"
+
+    updated = hass.config_entries.async_get_entry(entry.entry_id)
+    assert updated.data["partner_id"] == "p_new"
+    assert updated.data["contract_id"] == "c_new"
+    assert updated.data["premise_id"] == "pr_new"

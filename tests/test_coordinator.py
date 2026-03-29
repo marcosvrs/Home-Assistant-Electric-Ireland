@@ -793,3 +793,123 @@ async def test_empty_data_restart_returns_synthetic(recorder_mock, hass, mock_co
         assert result.get("last_import") is None
         assert result.get("datapoint_count") == 0
         assert result.get("import_error") is not None
+
+
+async def test_connection_restored_logging(recorder_mock, hass, mock_config_entry):
+    """Test that _last_update_success transitions from False to True on success."""
+    mock_config_entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+        return_value={},
+    ), patch(
+        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.fetch_day_range = AsyncMock(
+            return_value=(make_datapoints(1), None)
+        )
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import ElectricIrelandCoordinator
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+        coordinator._last_update_success = False  # simulate prior failure
+
+        with patch.object(coordinator, "_insert_statistics", new_callable=AsyncMock):
+            result = await coordinator._async_update_data()
+
+        assert coordinator._last_update_success is True
+        assert result is not None
+
+
+async def test_update_failed_reraise(recorder_mock, hass, mock_config_entry):
+    """Test UpdateFailed from _insert_statistics is re-raised through except block."""
+    from homeassistant.helpers.update_coordinator import UpdateFailed
+    mock_config_entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+        return_value={},
+    ), patch(
+        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.fetch_day_range = AsyncMock(
+            return_value=(make_datapoints(1), None)
+        )
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import ElectricIrelandCoordinator
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+
+        with patch.object(coordinator, "_insert_statistics",
+                          new_callable=AsyncMock,
+                          side_effect=UpdateFailed("insert failed")):
+            with pytest.raises(UpdateFailed):
+                await coordinator._async_update_data()
+
+        assert coordinator._last_update_success is False
+
+
+async def test_unexpected_exception_wrapped(recorder_mock, hass, mock_config_entry):
+    """Test unexpected exception from fetch_day_range is wrapped in UpdateFailed."""
+    from homeassistant.helpers.update_coordinator import UpdateFailed
+    mock_config_entry.add_to_hass(hass)
+
+    with patch(
+        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+        return_value={},
+    ), patch(
+        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.fetch_day_range = AsyncMock(
+            side_effect=RuntimeError("unexpected boom")
+        )
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import ElectricIrelandCoordinator
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+
+        with pytest.raises(UpdateFailed, match="unexpected boom"):
+            await coordinator._async_update_data()
+
+        assert coordinator._last_update_success is False
+
+
+async def test_latest_timestamp_none_when_interval_zero(recorder_mock, hass, mock_config_entry):
+    """Test latest_data_timestamp is None when all intervalEnd are 0 (falsy max)."""
+    mock_config_entry.add_to_hass(hass)
+
+    zero_ts_datapoints = [
+        {"consumption": 0.5, "cost": 0.1, "intervalEnd": 0}
+        for _ in range(3)
+    ]
+
+    with patch(
+        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+        return_value={},
+    ), patch(
+        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.fetch_day_range = AsyncMock(
+            return_value=(zero_ts_datapoints, None)
+        )
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import ElectricIrelandCoordinator
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+
+        with patch.object(coordinator, "_insert_statistics", new_callable=AsyncMock):
+            result = await coordinator._async_update_data()
+
+        assert result["latest_data_timestamp"] is None
