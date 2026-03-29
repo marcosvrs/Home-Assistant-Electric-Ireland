@@ -362,6 +362,94 @@ async def test_login_cached_timeout() -> None:
 
 
 # ---------------------------------------------------------------------------
+# discover_accounts tests
+# ---------------------------------------------------------------------------
+
+_DASHBOARD_MULTI_ACCOUNT_HTML = """<html><body>
+<div class="my-accounts__item">
+  <p class="account-number">111111111</p>
+  <h2 class="account-electricity-icon"></h2>
+</div>
+<div class="my-accounts__item">
+  <p class="account-number">222222222</p>
+  <h2 class="account-electricity-icon"></h2>
+  <h3 class="account-label">Office</h3>
+</div>
+</body></html>"""
+
+_DASHBOARD_GAS_ONLY_HTML = """<html><body>
+<div class="my-accounts__item">
+  <p class="account-number">333333333</p>
+  <h2 class="account-gas-icon"></h2>
+</div>
+</body></html>"""
+
+_DASHBOARD_NO_ACCOUNTS_HTML = "<html><body><p>Welcome</p></body></html>"
+
+
+@pytest.mark.asyncio
+async def test_discover_accounts_single() -> None:
+    api = ElectricIrelandAPI("user@test.com", "pass123")
+    with aioresponses_mock() as m:
+        m.get(f"{BASE_URL}/", status=200, body=_LOGIN_PAGE_HTML,
+              headers={"Set-Cookie": "rvt=rvttoken123; Path=/"})
+        m.post(f"{BASE_URL}/", status=200, body=_DASHBOARD_HTML)
+        async with aiohttp.ClientSession() as session:
+            accounts = await api.discover_accounts(session)
+    assert len(accounts) == 1
+    assert accounts[0]["account_number"] == "951785073"
+
+
+@pytest.mark.asyncio
+async def test_discover_accounts_multiple() -> None:
+    api = ElectricIrelandAPI("user@test.com", "pass123")
+    with aioresponses_mock() as m:
+        m.get(f"{BASE_URL}/", status=200, body=_LOGIN_PAGE_HTML,
+              headers={"Set-Cookie": "rvt=rvttoken123; Path=/"})
+        m.post(f"{BASE_URL}/", status=200, body=_DASHBOARD_MULTI_ACCOUNT_HTML)
+        async with aiohttp.ClientSession() as session:
+            accounts = await api.discover_accounts(session)
+    assert len(accounts) == 2
+    assert accounts[0]["account_number"] == "111111111"
+    assert accounts[1]["account_number"] == "222222222"
+    assert "Office" in accounts[1]["display_name"]
+
+
+@pytest.mark.asyncio
+async def test_discover_accounts_no_accounts() -> None:
+    api = ElectricIrelandAPI("user@test.com", "pass123")
+    with aioresponses_mock() as m:
+        m.get(f"{BASE_URL}/", status=200, body=_LOGIN_PAGE_HTML,
+              headers={"Set-Cookie": "rvt=rvttoken123; Path=/"})
+        m.post(f"{BASE_URL}/", status=200, body=_DASHBOARD_NO_ACCOUNTS_HTML)
+        async with aiohttp.ClientSession() as session:
+            with pytest.raises(AccountNotFound):
+                await api.discover_accounts(session)
+
+
+@pytest.mark.asyncio
+async def test_discover_accounts_gas_only() -> None:
+    api = ElectricIrelandAPI("user@test.com", "pass123")
+    with aioresponses_mock() as m:
+        m.get(f"{BASE_URL}/", status=200, body=_LOGIN_PAGE_HTML,
+              headers={"Set-Cookie": "rvt=rvttoken123; Path=/"})
+        m.post(f"{BASE_URL}/", status=200, body=_DASHBOARD_GAS_ONLY_HTML)
+        async with aiohttp.ClientSession() as session:
+            with pytest.raises(AccountNotFound):
+                await api.discover_accounts(session)
+
+
+@pytest.mark.asyncio
+async def test_discover_accounts_missing_tokens() -> None:
+    api = ElectricIrelandAPI("user@test.com", "pass123")
+    with aioresponses_mock() as m:
+        m.get(f"{BASE_URL}/", status=200, body=_LOGIN_PAGE_NO_SOURCE)
+        async with aiohttp.ClientSession() as session:
+            with pytest.raises(CannotConnect):
+                await api.discover_accounts(session)
+
+
+# ---------------------------------------------------------------------------
 # fetch_day_range fallback test
 # ---------------------------------------------------------------------------
 

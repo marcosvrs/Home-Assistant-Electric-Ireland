@@ -20,6 +20,9 @@ async def test_user_flow_success(recorder_mock, hass, enable_custom_integrations
         "custom_components.electric_ireland_insights.config_flow.async_create_clientsession"
     ):
         mock_api_instance = AsyncMock()
+        mock_api_instance.discover_accounts = AsyncMock(
+            return_value=[{"account_number": "951785073", "display_name": "951785073"}]
+        )
         mock_api_instance.validate_credentials = AsyncMock(
             return_value={"partner": "p1", "contract": "c1", "premise": "pr1"}
         )
@@ -33,17 +36,54 @@ async def test_user_flow_success(recorder_mock, hass, enable_custom_integrations
 
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
-            {
-                "username": "test@test.com",
-                "password": "testpass",
-                "account_number": "951785073",
-            },
+            {"username": "test@test.com", "password": "testpass"},
         )
         assert result2["type"] == FlowResultType.CREATE_ENTRY
         assert result2["data"]["account_number"] == "951785073"
         assert result2["data"]["partner_id"] == "p1"
         assert result2["data"]["contract_id"] == "c1"
         assert result2["data"]["premise_id"] == "pr1"
+
+
+async def test_user_flow_multi_account(recorder_mock, hass, enable_custom_integrations):
+    """Test user flow with multiple accounts shows account selection step."""
+    with patch(
+        "custom_components.electric_ireland_insights.config_flow.ElectricIrelandAPI"
+    ) as mock_api_class, patch(
+        "custom_components.electric_ireland_insights.config_flow.async_create_clientsession"
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.discover_accounts = AsyncMock(
+            return_value=[
+                {"account_number": "111111111", "display_name": "111111111 (Home)"},
+                {"account_number": "222222222", "display_name": "222222222 (Office)"},
+            ]
+        )
+        mock_api_instance.validate_credentials = AsyncMock(
+            return_value={"partner": "p1", "contract": "c1", "premise": "pr1"}
+        )
+        mock_api_class.return_value = mock_api_instance
+
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == "user"
+
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"username": "test@test.com", "password": "testpass"},
+        )
+        assert result2["type"] == FlowResultType.FORM
+        assert result2["step_id"] == "account"
+
+        result3 = await hass.config_entries.flow.async_configure(
+            result2["flow_id"],
+            {"account_number": "222222222"},
+        )
+        assert result3["type"] == FlowResultType.CREATE_ENTRY
+        assert result3["data"]["account_number"] == "222222222"
+        assert result3["data"]["partner_id"] == "p1"
 
 
 async def test_user_flow_invalid_auth(recorder_mock, hass, enable_custom_integrations):
@@ -54,7 +94,7 @@ async def test_user_flow_invalid_auth(recorder_mock, hass, enable_custom_integra
         "custom_components.electric_ireland_insights.config_flow.async_create_clientsession"
     ):
         mock_api_instance = AsyncMock()
-        mock_api_instance.validate_credentials = AsyncMock(side_effect=InvalidAuth)
+        mock_api_instance.discover_accounts = AsyncMock(side_effect=InvalidAuth)
         mock_api_class.return_value = mock_api_instance
 
         result = await hass.config_entries.flow.async_init(
@@ -62,7 +102,7 @@ async def test_user_flow_invalid_auth(recorder_mock, hass, enable_custom_integra
         )
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
-            {"username": "bad@test.com", "password": "wrong", "account_number": "123"},
+            {"username": "bad@test.com", "password": "wrong"},
         )
         assert result2["type"] == FlowResultType.FORM
         assert result2["errors"]["base"] == "invalid_auth"
@@ -76,7 +116,7 @@ async def test_user_flow_cannot_connect(recorder_mock, hass, enable_custom_integ
         "custom_components.electric_ireland_insights.config_flow.async_create_clientsession"
     ):
         mock_api_instance = AsyncMock()
-        mock_api_instance.validate_credentials = AsyncMock(side_effect=CannotConnect)
+        mock_api_instance.discover_accounts = AsyncMock(side_effect=CannotConnect)
         mock_api_class.return_value = mock_api_instance
 
         result = await hass.config_entries.flow.async_init(
@@ -84,7 +124,7 @@ async def test_user_flow_cannot_connect(recorder_mock, hass, enable_custom_integ
         )
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
-            {"username": "test@test.com", "password": "pass", "account_number": "123"},
+            {"username": "test@test.com", "password": "pass"},
         )
         assert result2["type"] == FlowResultType.FORM
         assert result2["errors"]["base"] == "cannot_connect"
@@ -98,7 +138,7 @@ async def test_user_flow_account_not_found(recorder_mock, hass, enable_custom_in
         "custom_components.electric_ireland_insights.config_flow.async_create_clientsession"
     ):
         mock_api_instance = AsyncMock()
-        mock_api_instance.validate_credentials = AsyncMock(side_effect=AccountNotFound)
+        mock_api_instance.discover_accounts = AsyncMock(side_effect=AccountNotFound)
         mock_api_class.return_value = mock_api_instance
 
         result = await hass.config_entries.flow.async_init(
@@ -106,7 +146,7 @@ async def test_user_flow_account_not_found(recorder_mock, hass, enable_custom_in
         )
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
-            {"username": "test@test.com", "password": "pass", "account_number": "999"},
+            {"username": "test@test.com", "password": "pass"},
         )
         assert result2["type"] == FlowResultType.FORM
         assert result2["errors"]["base"] == "account_not_found"
@@ -122,6 +162,9 @@ async def test_user_flow_duplicate_account(recorder_mock, hass, enable_custom_in
         "custom_components.electric_ireland_insights.config_flow.async_create_clientsession"
     ):
         mock_api_instance = AsyncMock()
+        mock_api_instance.discover_accounts = AsyncMock(
+            return_value=[{"account_number": "951785073", "display_name": "951785073"}]
+        )
         mock_api_instance.validate_credentials = AsyncMock(
             return_value={"partner": "p1", "contract": "c1", "premise": "pr1"}
         )
@@ -132,11 +175,7 @@ async def test_user_flow_duplicate_account(recorder_mock, hass, enable_custom_in
         )
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
-            {
-                "username": "test@test.com",
-                "password": "testpass",
-                "account_number": "951785073",
-            },
+            {"username": "test@test.com", "password": "testpass"},
         )
         assert result2["type"] == FlowResultType.ABORT
         assert result2["reason"] == "already_configured"
@@ -205,6 +244,9 @@ async def test_ids_cached_during_config_flow(recorder_mock, hass, enable_custom_
         "custom_components.electric_ireland_insights.config_flow.async_create_clientsession"
     ):
         mock_api_instance = AsyncMock()
+        mock_api_instance.discover_accounts = AsyncMock(
+            return_value=[{"account_number": "951785073", "display_name": "951785073"}]
+        )
         mock_api_instance.validate_credentials = AsyncMock(return_value=meter_ids)
         mock_api_class.return_value = mock_api_instance
 
@@ -214,7 +256,7 @@ async def test_ids_cached_during_config_flow(recorder_mock, hass, enable_custom_
         )
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
-            {"username": "test@test.com", "password": "testpass", "account_number": "951785073"},
+            {"username": "test@test.com", "password": "testpass"},
         )
 
     assert result2["type"] == FlowResultType.CREATE_ENTRY
@@ -377,7 +419,7 @@ async def test_user_flow_unexpected_exception(recorder_mock, hass, enable_custom
         "custom_components.electric_ireland_insights.config_flow.async_create_clientsession"
     ):
         mock_api_instance = AsyncMock()
-        mock_api_instance.validate_credentials = AsyncMock(side_effect=RuntimeError("boom"))
+        mock_api_instance.discover_accounts = AsyncMock(side_effect=RuntimeError("boom"))
         mock_api_class.return_value = mock_api_instance
 
         result = await hass.config_entries.flow.async_init(
@@ -385,7 +427,7 @@ async def test_user_flow_unexpected_exception(recorder_mock, hass, enable_custom
         )
         result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
-            {"username": "test@test.com", "password": "pass", "account_number": "123"},
+            {"username": "test@test.com", "password": "pass"},
         )
         assert result2["type"] == FlowResultType.FORM
         assert result2["errors"]["base"] == "cannot_connect"
