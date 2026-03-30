@@ -42,6 +42,11 @@ class ElectricIrelandAPI:
             source_val = source_input.get("value") if isinstance(source_input, Tag) else None
             source = source_val if isinstance(source_val, str) else None
 
+            if not rvt:
+                rvt_input = soup1.find("input", attrs={"name": "rvt"})
+                rvt_val = rvt_input.get("value") if isinstance(rvt_input, Tag) else None
+                rvt = rvt_val if isinstance(rvt_val, str) else None
+
             if not source or not rvt:
                 raise CannotConnect("Could not extract login tokens")
 
@@ -174,6 +179,11 @@ class ElectricIrelandAPI:
             source_val = source_input.get("value") if isinstance(source_input, Tag) else None
             source = source_val if isinstance(source_val, str) else None
 
+            if not rvt:
+                rvt_input = soup1.find("input", attrs={"name": "rvt"})
+                rvt_val = rvt_input.get("value") if isinstance(rvt_input, Tag) else None
+                rvt = rvt_val if isinstance(rvt_val, str) else None
+
             if not source or not rvt:
                 raise CachedIdsInvalid("Could not extract login tokens during cached login")
 
@@ -237,6 +247,11 @@ class ElectricIrelandAPI:
             source_input = soup1.find("input", attrs={"name": "Source"})
             source_val = source_input.get("value") if isinstance(source_input, Tag) else None
             source = source_val if isinstance(source_val, str) else None
+
+            if not rvt:
+                rvt_input = soup1.find("input", attrs={"name": "rvt"})
+                rvt_val = rvt_input.get("value") if isinstance(rvt_input, Tag) else None
+                rvt = rvt_val if isinstance(rvt_val, str) else None
 
             if not source or not rvt:
                 raise CannotConnect("Could not extract login tokens")
