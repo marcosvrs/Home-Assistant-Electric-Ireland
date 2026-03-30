@@ -294,7 +294,9 @@ async def test_fetch_day_range_clears_cookies_on_cached_fallback(
 
         api = ElectricIrelandAPI("u@test.com", "pass", ACCOUNT_1)
         result, discovered_ids = await api.fetch_day_range(
-            session, lookback_days=1, meter_ids=_IDS,
+            session,
+            lookback_days=1,
+            meter_ids=_IDS,
         )
 
     assert len(result) > 0
