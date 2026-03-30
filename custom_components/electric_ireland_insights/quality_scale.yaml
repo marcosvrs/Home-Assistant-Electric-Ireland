@@ -22,7 +22,7 @@ rules:
     comment: config_flow.py defines ElectricIrelandInsightsConfigFlow.
   config-flow-test-coverage:
     status: done
-    comment: tests/test_config_flow.py contains 7+ config flow tests.
+    comment: tests/test_config_flow.py has 20 unit tests + tests/integration/test_flows.py has 12 integration tests covering all config flow paths.
   dependency-transparency:
     status: done
     comment: manifest.json only adds beautifulsoup4; HTTP uses HA aiohttp.
@@ -151,7 +151,7 @@ rules:
     comment: __init__.py validates credentials in async_setup_entry before finishing setup.
   test-coverage:
     status: done
-    comment: pytest tests/ --cov --cov-fail-under=95 → 97.85% with 85 tests.
+    comment: pytest tests/ --cov --cov-fail-under=95 enforced in CI with 136 tests across unit and integration suites.
   unique-config-entry:
     status: done
     comment: config_flow.py calls async_set_unique_id(account_number) and aborts duplicates.

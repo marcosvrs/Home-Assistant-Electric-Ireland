@@ -12,8 +12,10 @@ Home Assistant custom integration (HACS) for **Electric Ireland Insights**. Scra
 ├── tests/                                         # All tests (see its own AGENTS.md)
 ├── docs/index.md                                  # HA-format integration documentation
 ├── brands/README.md                               # Branding assets (pending HA brands repo submission)
-├── .github/workflows/validate.yml                 # CI: hassfest + HACS validation, tests (3.12/3.13), mypy strict
-├── pyproject.toml                                 # Build config, dev deps, tool settings
+├── .github/workflows/validate.yml                 # CI: hassfest, HACS, ruff, mypy, tests (3.12/3.13)
+├── .github/dependabot.yml                         # Automated dependency updates (pip + actions)
+├── .pre-commit-config.yaml                        # Pre-commit hooks: ruff, mypy, codespell, whitespace
+├── pyproject.toml                                 # Build config, dev deps, ruff + mypy + pytest settings
 ├── mise.toml                                      # Dev env: Python 3.14, auto .venv
 ├── hacs.json                                      # HACS metadata (requires HA 2025.4.0, HACS 2.0.0)
 └── requirements.txt                               # Pip requirements
@@ -24,8 +26,8 @@ Home Assistant custom integration (HACS) for **Electric Ireland Insights**. Scra
 | Task | Location | Notes |
 |------|----------|-------|
 | Integration source | `custom_components/electric_ireland_insights/` | 13 files, see sub-AGENTS.md |
-| Tests | `tests/` | 8 files, see sub-AGENTS.md |
-| CI pipeline | `.github/workflows/validate.yml` | hassfest, HACS, pytest --cov-fail-under=95, mypy strict |
+| Tests | `tests/` | 9 test files + 2 conftest, see sub-AGENTS.md |
+| CI pipeline | `.github/workflows/validate.yml` | hassfest, HACS, ruff, mypy, pytest --cov-fail-under=95 |
 | HA-format docs | `docs/index.md` | For home-assistant.io submission |
 | Quality compliance | `custom_components/.../quality_scale.yaml` | 52-rule IQS self-assessment |
 | Dev environment | `mise.toml` + `pyproject.toml` | Python 3.14, .venv auto-create |
@@ -34,7 +36,7 @@ Home Assistant custom integration (HACS) for **Electric Ireland Insights**. Scra
 
 ```bash
 # Install dev dependencies
-pip install -e ".[dev]"
+pip install ".[dev]"
 
 # Run tests with coverage
 pytest tests/ --cov=custom_components/electric_ireland_insights --cov-report=term-missing --cov-fail-under=95 -q
@@ -42,17 +44,21 @@ pytest tests/ --cov=custom_components/electric_ireland_insights --cov-report=ter
 # Type checking
 mypy custom_components/electric_ireland_insights/ --strict --no-warn-return-any --ignore-missing-imports
 
+# Linting
+ruff check custom_components/ tests/
+ruff format --check custom_components/ tests/
+
 # Full CI locally (all must pass)
-pytest tests/ --cov=custom_components/electric_ireland_insights --cov-fail-under=95 -q && mypy custom_components/electric_ireland_insights/ --strict --no-warn-return-any --ignore-missing-imports
+pytest tests/ --cov=custom_components/electric_ireland_insights --cov-fail-under=95 -q && mypy custom_components/electric_ireland_insights/ --strict --no-warn-return-any --ignore-missing-imports && ruff check custom_components/ tests/
 ```
 
 ## CONVENTIONS
 
 - **mypy strict** on all integration code. No `# type: ignore`, no `Any` escape hatches.
+- **ruff** for linting + formatting. Config in `pyproject.toml`. Rules: B, E, F, I, S, UP, W, RUF, SIM, T20, ASYNC.
+- **pre-commit hooks** for local dev: ruff, mypy, codespell, trailing-whitespace. Config in `.pre-commit-config.yaml`.
 - **asyncio_mode = "auto"** in pytest. All test functions are async by default.
 - **Coverage omits** `types.py` (TypedDict-only file). All other modules must meet >=95%.
-- **No linter config** (no ruff, flake8, pylint). Rely on mypy strict + HA hassfest validation.
-- **No pre-commit hooks**. CI is the gate.
 - **No YAML config**. Config-entry-only via `cv.config_entry_only_config_schema(DOMAIN)`.
 
 ## ANTI-PATTERNS (THIS PROJECT)
@@ -411,10 +417,11 @@ Before any change is considered complete:
 
 1. `pytest tests/ --cov-fail-under=95` passes
 2. `mypy --strict` passes with zero errors
-3. `quality_scale.yaml` updated if new rules are satisfied or new exemptions needed
-4. `docs/index.md` updated if user-facing behavior changes
-5. `strings.json` updated if new UI strings, errors, or entity names added
-6. No regressions in existing tests
+3. `ruff check` and `ruff format --check` pass with zero errors
+4. `quality_scale.yaml` updated if new rules are satisfied or new exemptions needed
+5. `docs/index.md` updated if user-facing behavior changes
+6. `strings.json` updated if new UI strings, errors, or entity names added
+7. No regressions in existing tests
 
 ---
 
