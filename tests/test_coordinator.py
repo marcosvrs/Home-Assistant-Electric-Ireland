@@ -22,7 +22,6 @@ from custom_components.electric_ireland_insights.exceptions import (
     InvalidAuth,
 )
 
-UTC = UTC
 ACCOUNT = "951785073"
 STAT_ID_CONSUMPTION = f"{DOMAIN}:{ACCOUNT}_consumption"
 STAT_ID_COST = f"{DOMAIN}:{ACCOUNT}_cost"
@@ -732,20 +731,17 @@ async def test_empty_data_subsequent_run_no_update(recorder_mock, hass, mock_con
 
         coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
 
-        from datetime import UTC
-        from datetime import datetime as dt
-
         coordinator.data = {
-            "last_import": dt(2026, 3, 28, 12, 0, tzinfo=UTC),
+            "last_import": datetime(2026, 3, 28, 12, 0, tzinfo=UTC),
             "datapoint_count": 24,
-            "latest_data_timestamp": dt(2026, 3, 26, 0, 0, tzinfo=UTC),
+            "latest_data_timestamp": datetime(2026, 3, 26, 0, 0, tzinfo=UTC),
             "import_error": None,
         }
         coordinator._has_imported_before = True
 
         result = await coordinator._async_update_data()
 
-        assert result["last_import"] == dt(2026, 3, 28, 12, 0, tzinfo=UTC), (
+        assert result["last_import"] == datetime(2026, 3, 28, 12, 0, tzinfo=UTC), (
             "Empty subsequent run should not update last_import"
         )
 

@@ -213,11 +213,6 @@ async def test_reauth_flow_invalid_auth(recorder_mock, hass, enable_custom_integ
 
 async def test_ids_cached_during_config_flow(recorder_mock, hass, enable_custom_integrations):
     """Test that meter IDs discovered during config flow are stored in entry data."""
-    from unittest.mock import AsyncMock, patch
-
-    from homeassistant import config_entries
-    from homeassistant.data_entry_flow import FlowResultType
-
     meter_ids = {"partner": "P_TEST", "contract": "C_TEST", "premise": "PR_TEST"}
 
     with (

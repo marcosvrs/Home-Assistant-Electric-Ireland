@@ -12,8 +12,6 @@ from custom_components.electric_ireland_insights.sensor import (
     ElectricIrelandDiagnosticSensor,
 )
 
-UTC = UTC
-
 
 async def test_diagnostic_entities_created(hass, enable_custom_integrations, mock_config_entry):
     mock_config_entry.add_to_hass(hass)

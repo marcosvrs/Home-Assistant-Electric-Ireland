@@ -8,7 +8,7 @@ version = "0.0.0"
 description = "Home Assistant integration for Electric Ireland Insights"
 requires-python = ">=3.12"
 dependencies = [
-  "beautifulsoup4",
+  "beautifulsoup4~=4.14.3",
 ]
 
 [tool.setuptools.packages.find]

@@ -309,7 +309,6 @@ async def test_login_cached_success() -> None:
 
 @pytest.mark.asyncio
 async def test_login_cached_missing_tokens() -> None:
-    from custom_components.electric_ireland_insights.exceptions import CachedIdsInvalid
 
     api = ElectricIrelandAPI("user@test.com", "pass123", "951785073")
     meter_ids = {"partner": "P1", "contract": "C1", "premise": "PR1"}
@@ -322,7 +321,6 @@ async def test_login_cached_missing_tokens() -> None:
 
 @pytest.mark.asyncio
 async def test_login_cached_client_error() -> None:
-    from custom_components.electric_ireland_insights.exceptions import CachedIdsInvalid
 
     api = ElectricIrelandAPI("user@test.com", "pass123", "951785073")
     meter_ids = {"partner": "P1", "contract": "C1", "premise": "PR1"}
@@ -335,8 +333,6 @@ async def test_login_cached_client_error() -> None:
 
 @pytest.mark.asyncio
 async def test_login_cached_timeout() -> None:
-
-    from custom_components.electric_ireland_insights.exceptions import CachedIdsInvalid
 
     api = ElectricIrelandAPI("user@test.com", "pass123", "951785073")
     meter_ids = {"partner": "P1", "contract": "C1", "premise": "PR1"}
@@ -438,7 +434,6 @@ async def test_discover_accounts_missing_tokens() -> None:
 
 @pytest.mark.asyncio
 async def test_fetch_day_range_cached_fallback() -> None:
-    from custom_components.electric_ireland_insights.exceptions import CachedIdsInvalid
 
     api = ElectricIrelandAPI("user@test.com", "pass123", "951785073")
     meter_ids = {"partner": "OLD_P", "contract": "OLD_C", "premise": "OLD_PR"}
@@ -460,7 +455,6 @@ async def test_fetch_day_range_cached_fallback() -> None:
 
 @pytest.mark.asyncio
 async def test_get_data_401() -> None:
-    from custom_components.electric_ireland_insights.exceptions import CachedIdsInvalid
 
     meter_ids = {"partner": "P1", "contract": "C1", "premise": "PR1"}
     target_date = datetime(2026, 3, 23, tzinfo=UTC)
@@ -475,7 +469,6 @@ async def test_get_data_401() -> None:
 
 @pytest.mark.asyncio
 async def test_get_data_403() -> None:
-    from custom_components.electric_ireland_insights.exceptions import CachedIdsInvalid
 
     meter_ids = {"partner": "P1", "contract": "C1", "premise": "PR1"}
     target_date = datetime(2026, 3, 23, tzinfo=UTC)
@@ -490,7 +483,6 @@ async def test_get_data_403() -> None:
 
 @pytest.mark.asyncio
 async def test_get_data_non_json_response() -> None:
-    from custom_components.electric_ireland_insights.exceptions import CachedIdsInvalid
 
     meter_ids = {"partner": "P1", "contract": "C1", "premise": "PR1"}
     target_date = datetime(2026, 3, 23, tzinfo=UTC)

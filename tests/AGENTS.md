@@ -12,7 +12,7 @@ tests/
 │                                   # + pycares daemon thread prevention (module-level patch)
 ├── test_api.py                     # API client tests (37 tests, 630 lines)
 ├── test_coordinator.py             # Coordinator + statistics tests (22 tests, 898 lines)
-├── test_config_flow.py             # Config flow tests (21 tests, 608 lines)
+├── test_config_flow.py             # Config flow tests (20 tests, 608 lines)
 ├── test_sensor.py                  # Diagnostic sensor tests (9 tests, 138 lines)
 ├── test_init.py                    # Setup/unload/migration tests (4 tests, 111 lines)
 ├── test_diagnostics.py             # Diagnostics redaction tests (4 tests, 89 lines)
@@ -22,7 +22,7 @@ tests/
 │   ├── conftest.py                 # HTML/JSON builders, mock_ei_http helper
 │   ├── test_flows.py              # Config flow integration tests (12 tests, 436 lines)
 │   ├── test_lifecycle.py          # Setup/unload/migration integration tests (11 tests, 368 lines)
-│   └── test_api.py                # Account discovery + meter data fetch (2 tests, 242 lines)
+│   └── test_api.py                # Account discovery + meter data fetch (17 tests, 242 lines)
 └── __init__.py                     # Empty
 ```
 
