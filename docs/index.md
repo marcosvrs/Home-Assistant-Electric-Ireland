@@ -28,7 +28,12 @@ ha_quality_scale: platinum
 
 ## Installation
 
-{% include integrations/config_flow.md %}
+1. Install via [HACS](https://hacs.xyz/) (search for "Electric Ireland Insights") or manually copy `custom_components/electric_ireland_insights/` to your HA config directory.
+2. Restart Home Assistant.
+3. Go to **Settings** → **Devices & services**.
+4. Click **+ Add integration**.
+5. Search for and select **Electric Ireland Insights**.
+6. Follow the on-screen instructions to complete the setup.
 
 During setup you will be asked for:
 
@@ -41,7 +46,9 @@ If multiple electricity accounts are found for your login, you will be asked to 
 
 ## Removal
 
-{% include integrations/remove_device_service.md %}
+1. Go to **Settings** → **Devices & services**.
+2. Select the **Electric Ireland Insights** integration card.
+3. Click the three-dot menu (**⋮**) and select **Delete**.
 
 ## Data update
 
