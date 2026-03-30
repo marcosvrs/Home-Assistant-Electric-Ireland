@@ -29,10 +29,14 @@
       },
       "reconfigure": {
         "title": "Reconfigure Electric Ireland",
-        "description": "Update credentials for {username} or force re-discovery of meter IDs.",
+        "description": "Update your password or clear cached meter identifiers for {username}.",
         "data": {
           "password": "Password",
-          "force_rediscovery": "Force re-discovery of meter IDs"
+          "force_rediscovery": "Re-discover meter IDs from the portal"
+        },
+        "data_description": {
+          "password": "Your current Electric Ireland portal password (re-enter even if unchanged)",
+          "force_rediscovery": "Clear cached meter identifiers (partner, contract, premise) and re-discover them from the Electric Ireland website on the next data refresh. Use this if data imports have stopped but your credentials are correct."
         }
       }
     },

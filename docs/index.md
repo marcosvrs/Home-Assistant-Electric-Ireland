@@ -81,7 +81,14 @@ These entities are **disabled by default** and can be enabled in **Settings → 
 
 ## Reconfiguration
 
-To update your password or force re-discovery of meter IDs, use the **Reconfigure** option in **Settings → Devices & services → Electric Ireland Insights → ⋮ → Reconfigure**.
+To update your password or troubleshoot data import issues, use **Settings → Devices & services → Electric Ireland Insights → ⋮ → Reconfigure**.
+
+| Option | Description |
+|--------|-------------|
+| **Password** | Re-enter your current password (required even if unchanged) |
+| **Re-discover meter IDs** | Clears the cached meter identifiers (partner, contract, premise) and forces the integration to re-discover them from the Electric Ireland portal on the next refresh. Use this when data imports have stopped but your credentials are still valid — typically caused by Electric Ireland changing internal account identifiers after a meter swap or account migration. |
+
+If the password has changed, cached meter IDs are cleared automatically — you don't need to check the re-discovery option.
 
 ## Automation example
 
