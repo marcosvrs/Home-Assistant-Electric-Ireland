@@ -41,7 +41,7 @@ During setup you will be asked for:
 | **Username** | Your Electric Ireland portal email address |
 | **Password** | Your Electric Ireland portal password |
 
-If multiple electricity accounts are found for your login, you will be asked to select which account to configure. The account number and meter IDs are discovered automatically.
+After authenticating, the integration discovers all electricity accounts linked to your login. If only one account is found, it is selected automatically. If multiple accounts are found, a dropdown is shown for you to select which account to configure. Each config entry supports one account — add the integration again for additional accounts.
 
 ## Removal
 
@@ -105,7 +105,7 @@ automation:
 - **1–3 day data delay**: Hourly readings are published by ESB with a delay; this integration cannot fetch data faster than ESB publishes it.
 - **Cost excludes discounts and standing charges**: The reported cost is the gross tariff cost with VAT. It does not include the 30% Off Direct Debit discount, standing charges, or levies.
 - **Scraping dependency**: The integration authenticates via the Electric Ireland web portal. Changes to the portal's HTML structure may break the login flow until the integration is updated.
-- **Single account per entry**: Each config entry supports one Electric Ireland account number. Add multiple entries for multiple accounts.
+- **Single account per entry**: Each config entry supports one electricity account. To monitor multiple accounts, add the integration once per account.
 
 ## Troubleshooting
 
