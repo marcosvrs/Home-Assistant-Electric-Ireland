@@ -24,7 +24,6 @@ ha_quality_scale: platinum
 
 - An active Electric Ireland account with **Insights access** enabled
 - A **smart meter** installed at your premises (required for hourly data)
-- Your Electric Ireland **account number** (found on your bill or in the online portal)
 
 ## Installation
 
@@ -42,7 +41,7 @@ During setup you will be asked for:
 | **Username** | Your Electric Ireland portal email address |
 | **Password** | Your Electric Ireland portal password |
 
-If multiple electricity accounts are found for your login, you will be asked to select which account to configure.
+If multiple electricity accounts are found for your login, you will be asked to select which account to configure. The account number and meter IDs are discovered automatically.
 
 ## Removal
 
@@ -116,7 +115,7 @@ Verify your username and password by logging in at [youraccountonline.electricir
 
 ### Account not found
 
-Ensure the **Account Number** entered during setup matches exactly the number shown on your bill or in the portal. The account must be an **electricity** account (gas accounts are not supported).
+The integration automatically discovers electricity accounts linked to your login. If no accounts are found, ensure your login has an **electricity** account with Insights access enabled (gas-only accounts are not supported). You can verify by logging in at [youraccountonline.electricireland.ie](https://youraccountonline.electricireland.ie) and checking the Insights section.
 
 ### No data / Data freshness increasing
 
