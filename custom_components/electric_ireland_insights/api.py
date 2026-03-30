@@ -132,6 +132,7 @@ class ElectricIrelandAPI:
                 client = await self._login_cached(session, meter_ids)
             except CachedIdsInvalid as err:
                 LOGGER.warning("Cached IDs failed (%s), falling back to full login", err)
+                session.cookie_jar.clear()
                 client = await self._login(session)
                 discovered_ids = {
                     "partner": client._partner,

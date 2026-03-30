@@ -34,7 +34,7 @@ GAS_ACCOUNT = "333333333"
 # ---------------------------------------------------------------------------
 # HTML builders — mirror the real Electric Ireland markup
 # ---------------------------------------------------------------------------
-LOGIN_PAGE = '<html><body><input name="Source" value="src_token"/></body></html>'
+LOGIN_PAGE = '<html><body><input name="Source" value="src_token"/><input name="rvt" value="rvt_from_input"/></body></html>'
 LOGIN_PAGE_NO_SOURCE = "<html><body><p>nothing here</p></body></html>"
 
 

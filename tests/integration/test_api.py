@@ -240,3 +240,63 @@ async def test_get_data_non_json_raises(session: aiohttp.ClientSession) -> None:
         m.get(_HOURLY_RE, body="<html>Not JSON</html>", content_type="text/html")
         with pytest.raises(CachedIdsInvalid):
             await MeterInsightClient(session, _IDS).get_data(_DATE)
+
+
+# ---------------------------------------------------------------------------
+# rvt token fallback: extract from hidden input when cookie is absent
+# ---------------------------------------------------------------------------
+
+
+async def test_discover_accounts_rvt_from_hidden_input(session: aiohttp.ClientSession) -> None:
+    """When rvt cookie is absent, rvt is extracted from the hidden form input."""
+    with aioresponses() as m:
+        m.get(f"{BASE_URL}/", body=LOGIN_PAGE)
+        m.post(f"{BASE_URL}/", body=page(acct_div(ACCOUNT_1)))
+
+        accounts = await ElectricIrelandAPI("u@test.com", "pass").discover_accounts(session)
+
+    assert len(accounts) == 1
+    assert accounts[0]["account_number"] == ACCOUNT_1
+
+
+async def test_validate_credentials_rvt_from_hidden_input(session: aiohttp.ClientSession) -> None:
+    """validate_credentials extracts rvt from hidden input when cookie is absent."""
+    db = page(acct_div(ACCOUNT_1))
+    with aioresponses() as m:
+        m.get(f"{BASE_URL}/", body=LOGIN_PAGE)
+        m.post(f"{BASE_URL}/", body=db)
+        m.post(f"{BASE_URL}/Accounts/OnEvent", body=insights_page(PARTNER, CONTRACT, PREMISE))
+
+        api = ElectricIrelandAPI("u@test.com", "pass", ACCOUNT_1)
+        result = await api.validate_credentials(session)
+
+    assert result["partner"] == PARTNER
+
+
+async def test_fetch_day_range_clears_cookies_on_cached_fallback(
+    session: aiohttp.ClientSession,
+) -> None:
+    """When _login_cached fails, cookie jar is cleared before _login fallback."""
+    db = page(acct_div(ACCOUNT_1))
+    with aioresponses() as m:
+        # _login_cached: GET login → POST login → OnEvent returns non-insights
+        m.get(f"{BASE_URL}/", body=LOGIN_PAGE, headers={"Set-Cookie": "rvt=tok1"})
+        m.post(f"{BASE_URL}/", body=db)
+        m.post(f"{BASE_URL}/Accounts/OnEvent", body="<html>not insights</html>")
+        # _login fallback (after cookie jar clear): GET login → POST login → OnEvent
+        m.get(f"{BASE_URL}/", body=LOGIN_PAGE, headers={"Set-Cookie": "rvt=tok2"})
+        m.post(f"{BASE_URL}/", body=db)
+        m.post(
+            f"{BASE_URL}/Accounts/OnEvent",
+            body=insights_page(PARTNER, CONTRACT, PREMISE),
+        )
+        m.get(_HOURLY_RE, callback=hourly_callback, repeat=True)
+
+        api = ElectricIrelandAPI("u@test.com", "pass", ACCOUNT_1)
+        result, discovered_ids = await api.fetch_day_range(
+            session, lookback_days=1, meter_ids=_IDS,
+        )
+
+    assert len(result) > 0
+    assert discovered_ids is not None
+    assert discovered_ids["partner"] == PARTNER
