@@ -9,12 +9,68 @@ on:
 
 jobs:
   validate-hacs:
-    runs-on: "ubuntu-latest"
+    runs-on: ubuntu-latest
     steps:
-      - uses: "actions/checkout@v4"
+      - uses: actions/checkout@v4
       - name: HASS validation
-        uses: "home-assistant/actions/hassfest@master"
+        uses: home-assistant/actions/hassfest@master
       - name: HACS validation
-        uses: "hacs/action@main"
+        uses: hacs/action@main
         with:
-          category: "integration"
+          category: integration
+
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install \
+            pytest \
+            pytest-homeassistant-custom-component \
+            pytest-asyncio \
+            pytest-cov \
+            aioresponses \
+            beautifulsoup4
+
+      - name: Run tests with coverage
+        run: |
+          pytest tests/ \
+            --cov=custom_components/electric_ireland_insights \
+            --cov-report=term-missing \
+            --cov-fail-under=95 \
+            -q
+
+  mypy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install \
+            mypy \
+            types-beautifulsoup4
+
+      - name: Run mypy strict
+        run: |
+          mypy custom_components/electric_ireland_insights/ \
+            --strict \
+            --no-warn-return-any \
+            --ignore-missing-imports

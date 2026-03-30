@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "home-assistant-electric-ireland"
+version = "0.0.0"
+description = "Home Assistant integration for Electric Ireland Insights"
+requires-python = ">=3.12"
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-homeassistant-custom-component",
+  "pytest-asyncio",
+  "pytest-cov",
+  "aioresponses",
+  "mypy>=1.0",
+  "types-beautifulsoup4",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+omit = [
+  "custom_components/electric_ireland_insights/types.py",
+]
+
+[tool.mypy]
+strict = true
+warn_return_any = false
+
+[[tool.mypy.overrides]]
+module = [
+    "homeassistant.*",
+    "pytest_homeassistant_custom_component.*",
+    "bs4.*",
+    "voluptuous.*",
+    "aioresponses.*",
+    "aiohttp.*",
+]
+ignore_missing_imports = true

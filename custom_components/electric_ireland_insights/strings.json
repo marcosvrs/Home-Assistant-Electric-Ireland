@@ -1,0 +1,63 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Electric Ireland Insights",
+        "description": "Enter your Electric Ireland online account credentials",
+        "data": {
+          "username": "Email",
+          "password": "Password"
+        },
+        "data_description": {
+          "username": "Your Electric Ireland online account email address",
+          "password": "Your Electric Ireland online account password"
+        }
+      },
+      "account": {
+        "title": "Select Account",
+        "description": "{num_accounts} electricity account(s) found for this login. Select which account to configure.",
+        "data": {
+          "account_number": "Account"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate Electric Ireland",
+        "description": "Your Electric Ireland credentials have expired. Please re-enter your password.",
+        "data": {
+          "password": "Password"
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Electric Ireland",
+        "description": "Update credentials for {username} or force re-discovery of meter IDs.",
+        "data": {
+          "password": "Password",
+          "force_rediscovery": "Force re-discovery of meter IDs"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid username or password",
+      "cannot_connect": "Unable to connect to Electric Ireland. Please check your internet connection.",
+      "account_not_found": "No electricity accounts found for this user."
+    },
+    "abort": {
+      "already_configured": "This Electric Ireland account is already configured",
+      "reauth_successful": "Re-authentication was successful",
+      "reconfigure_successful": "Reconfiguration was successful",
+      "invalid_auth": "Authentication failed during account setup",
+      "cannot_connect": "Unable to connect to Electric Ireland during account setup",
+      "account_not_found": "The selected account could not be verified"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "last_import_time": {
+        "name": "Last Import Time"
+      },
+      "data_freshness_days": {
+        "name": "Data Freshness"
+      }
+    }
+  }
+}
