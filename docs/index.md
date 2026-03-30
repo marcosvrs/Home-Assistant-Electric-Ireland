@@ -10,9 +10,10 @@ ha_codeowners:
   - "@barreeeiroo"
 ha_domain: electric_ireland_insights
 ha_platforms:
+  - diagnostics
   - sensor
 ha_integration_type: service
-ha_quality_scale: platinum
+ha_quality_scale: gold
 ---
 
 # Electric Ireland Insights
@@ -83,12 +84,12 @@ Notify when data has not been updated for more than 5 days:
 ```yaml
 automation:
   - alias: "Alert: Electric Ireland data stale"
-    trigger:
-      - platform: numeric_state
+    triggers:
+      - trigger: numeric_state
         entity_id: sensor.electric_ireland_insights_data_freshness
         above: 5
-    action:
-      - service: notify.mobile_app
+    actions:
+      - action: notify.mobile_app
         data:
           message: "Electric Ireland data is {{ states('sensor.electric_ireland_insights_data_freshness') }} days old."
 ```
@@ -120,3 +121,19 @@ Electric Ireland publishes data with a 1–3 day delay. If freshness exceeds 5 d
 ### Re-authentication required
 
 If the integration enters a re-authentication state, go to **Settings → Devices & services → Electric Ireland Insights** and follow the re-authentication flow to update your credentials.
+
+### Debug logging
+
+To help diagnose issues, enable debug logging for this integration:
+
+1. Go to **Settings → Devices & services → Electric Ireland Insights → ⋮ → Enable debug logging**.
+2. Reproduce the issue.
+3. Go back and select **Disable debug logging** to download the log file.
+
+Alternatively, add the following to your `configuration.yaml`:
+
+```yaml
+logger:
+  logs:
+    custom_components.electric_ireland_insights: debug
+```
