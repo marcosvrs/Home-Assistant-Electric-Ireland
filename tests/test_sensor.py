@@ -1,18 +1,18 @@
 # pyright: reportMissingImports=false
 """Tests for Electric Ireland diagnostic entities."""
+
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
-from datetime import datetime, timezone
 
 from homeassistant.const import EntityCategory
 
-from custom_components.electric_ireland_insights.sensor import (
-    ElectricIrelandDiagnosticSensor,
-    DIAGNOSTIC_SENSORS,
-)
 from custom_components.electric_ireland_insights.coordinator import ElectricIrelandCoordinator
+from custom_components.electric_ireland_insights.sensor import (
+    DIAGNOSTIC_SENSORS,
+    ElectricIrelandDiagnosticSensor,
+)
 
-
-UTC = timezone.utc
+UTC = UTC
 
 
 async def test_diagnostic_entities_created(hass, enable_custom_integrations, mock_config_entry):
@@ -113,10 +113,9 @@ async def test_has_entity_name_is_true(hass, enable_custom_integrations, mock_co
 
 async def test_data_freshness_with_valid_timestamp(hass, enable_custom_integrations, mock_config_entry):
     """Test data_freshness_days returns a float when latest_data_timestamp is set."""
-    from datetime import timedelta
     mock_config_entry.add_to_hass(hass)
     mock_coordinator = MagicMock(spec=ElectricIrelandCoordinator)
-    two_days_ago = datetime(2026, 3, 21, 12, 0, 0, tzinfo=UTC) 
+    two_days_ago = datetime(2026, 3, 21, 12, 0, 0, tzinfo=UTC)
     mock_coordinator.data = {
         "last_import": datetime(2026, 3, 23, 12, 0, 0, tzinfo=UTC),
         "datapoint_count": 24,
@@ -130,7 +129,7 @@ async def test_data_freshness_with_valid_timestamp(hass, enable_custom_integrati
     sensor = ElectricIrelandDiagnosticSensor(mock_coordinator, freshness_desc, "951785073")
 
     from unittest.mock import patch as _patch
-    from homeassistant.util.dt import utcnow as _utcnow
+
     fixed_now = datetime(2026, 3, 23, 12, 0, 0, tzinfo=UTC)
     with _patch("custom_components.electric_ireland_insights.sensor.utcnow", return_value=fixed_now):
         value = sensor.native_value

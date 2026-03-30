@@ -1,14 +1,16 @@
 # pyright: reportMissingImports=false
 """Tests for Electric Ireland diagnostics."""
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
+
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.electric_ireland_insights.diagnostics import (
     async_get_config_entry_diagnostics,
 )
-from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-UTC = timezone.utc
+UTC = UTC
 
 
 async def test_diagnostics_structure(hass, enable_custom_integrations, mock_config_entry):

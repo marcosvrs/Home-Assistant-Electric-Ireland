@@ -1,11 +1,11 @@
 """Tests for the Electric Ireland coordinator."""
-import pytest
-from datetime import datetime, timezone, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
 
-from homeassistant.components.recorder.statistics import statistics_during_period
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
+
+import pytest
 from homeassistant.components.recorder import get_instance
-from homeassistant.config_entries import ConfigEntryState
+from homeassistant.components.recorder.statistics import statistics_during_period
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from pytest_homeassistant_custom_component.components.recorder.common import (
@@ -18,11 +18,11 @@ from custom_components.electric_ireland_insights.const import (
     LOOKUP_DAYS,
 )
 from custom_components.electric_ireland_insights.exceptions import (
-    InvalidAuth,
     CannotConnect,
+    InvalidAuth,
 )
 
-UTC = timezone.utc
+UTC = UTC
 ACCOUNT = "951785073"
 STAT_ID_CONSUMPTION = f"{DOMAIN}:{ACCOUNT}_consumption"
 STAT_ID_COST = f"{DOMAIN}:{ACCOUNT}_cost"
@@ -53,18 +53,16 @@ async def test_first_run_imports_30_days(recorder_mock, hass, mock_config_entry)
     """Test first run uses 30-day lookback when no stats exist."""
     mock_config_entry.add_to_hass(hass)
 
-    with patch(
-        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
-        return_value={},
-    ), patch(
-        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
-    ) as mock_api_class, patch(
-        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
     ):
         mock_api_instance = AsyncMock()
-        mock_api_instance.fetch_day_range = AsyncMock(
-            return_value=(make_datapoints(30), None)
-        )
+        mock_api_instance.fetch_day_range = AsyncMock(return_value=(make_datapoints(30), None))
         mock_api_class.return_value = mock_api_instance
 
         from custom_components.electric_ireland_insights.coordinator import (
@@ -90,18 +88,16 @@ async def test_subsequent_run_imports_7_days(recorder_mock, hass, mock_config_en
     """Test subsequent run uses 7-day lookback when stats already exist."""
     mock_config_entry.add_to_hass(hass)
 
-    with patch(
-        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
-        return_value={STAT_ID_CONSUMPTION: [{"sum": 100.0}]},
-    ), patch(
-        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
-    ) as mock_api_class, patch(
-        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={STAT_ID_CONSUMPTION: [{"sum": 100.0}]},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
     ):
         mock_api_instance = AsyncMock()
-        mock_api_instance.fetch_day_range = AsyncMock(
-            return_value=(make_datapoints(7), None)
-        )
+        mock_api_instance.fetch_day_range = AsyncMock(return_value=(make_datapoints(7), None))
         mock_api_class.return_value = mock_api_instance
 
         from custom_components.electric_ireland_insights.coordinator import (
@@ -129,13 +125,13 @@ async def test_consumption_statistics_correct(recorder_mock, hass, mock_config_e
 
     datapoints = make_datapoints(1)
 
-    with patch(
-        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
-        return_value={},
-    ), patch(
-        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
-    ) as mock_api_class, patch(
-        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
     ):
         mock_api_instance = AsyncMock()
         mock_api_instance.fetch_day_range = AsyncMock(return_value=(datapoints, None))
@@ -181,13 +177,13 @@ async def test_cost_statistics_correct(recorder_mock, hass, mock_config_entry):
 
     datapoints = make_datapoints(1)
 
-    with patch(
-        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
-        return_value={},
-    ), patch(
-        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
-    ) as mock_api_class, patch(
-        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
     ):
         mock_api_instance = AsyncMock()
         mock_api_instance.fetch_day_range = AsyncMock(return_value=(datapoints, None))
@@ -231,18 +227,16 @@ async def test_statistic_id_format(recorder_mock, hass, mock_config_entry):
     """Test statistic IDs match the expected domain:account_metric format."""
     mock_config_entry.add_to_hass(hass)
 
-    with patch(
-        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
-        return_value={},
-    ), patch(
-        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
-    ) as mock_api_class, patch(
-        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
     ):
         mock_api_instance = AsyncMock()
-        mock_api_instance.fetch_day_range = AsyncMock(
-            return_value=(make_datapoints(1), None)
-        )
+        mock_api_instance.fetch_day_range = AsyncMock(return_value=(make_datapoints(1), None))
         mock_api_class.return_value = mock_api_instance
 
         from custom_components.electric_ireland_insights.coordinator import (
@@ -290,13 +284,13 @@ async def test_interval_start_alignment(recorder_mock, hass, mock_config_entry):
         }
     ]
 
-    with patch(
-        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
-        return_value={},
-    ), patch(
-        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
-    ) as mock_api_class, patch(
-        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
     ):
         mock_api_instance = AsyncMock()
         mock_api_instance.fetch_day_range = AsyncMock(return_value=(datapoints, None))
@@ -344,12 +338,12 @@ async def test_sum_continuity_across_runs(recorder_mock, hass, mock_config_entry
 
     first_run_total = sum(dp["consumption"] for dp in first_run_data)
 
-    with patch(
-        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
-    ) as mock_get_last, patch(
-        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
-    ) as mock_api_class, patch(
-        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+        ) as mock_get_last,
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
     ):
         mock_api_instance = AsyncMock()
         mock_api_class.return_value = mock_api_instance
@@ -367,9 +361,7 @@ async def test_sum_continuity_across_runs(recorder_mock, hass, mock_config_entry
         await get_instance(hass).async_add_executor_job(lambda: None)
         await hass.async_block_till_done()
 
-        mock_get_last.return_value = {
-            STAT_ID_CONSUMPTION: [{"sum": first_run_total}]
-        }
+        mock_get_last.return_value = {STAT_ID_CONSUMPTION: [{"sum": first_run_total}]}
         mock_api_instance.fetch_day_range = AsyncMock(return_value=(second_run_data, None))
 
         await coordinator._async_update_data()
@@ -405,18 +397,16 @@ async def test_auth_error_raises_config_entry_auth_failed(hass, mock_config_entr
     """Test that InvalidAuth from API raises ConfigEntryAuthFailed."""
     mock_config_entry.add_to_hass(hass)
 
-    with patch(
-        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
-        return_value={},
-    ), patch(
-        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
-    ) as mock_api_class, patch(
-        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
     ):
         mock_api_instance = AsyncMock()
-        mock_api_instance.fetch_day_range = AsyncMock(
-            side_effect=InvalidAuth("Invalid credentials")
-        )
+        mock_api_instance.fetch_day_range = AsyncMock(side_effect=InvalidAuth("Invalid credentials"))
         mock_api_class.return_value = mock_api_instance
 
         from custom_components.electric_ireland_insights.coordinator import (
@@ -438,18 +428,16 @@ async def test_connection_error_raises_update_failed(hass, mock_config_entry):
     """Test that CannotConnect from API raises UpdateFailed."""
     mock_config_entry.add_to_hass(hass)
 
-    with patch(
-        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
-        return_value={},
-    ), patch(
-        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
-    ) as mock_api_class, patch(
-        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
     ):
         mock_api_instance = AsyncMock()
-        mock_api_instance.fetch_day_range = AsyncMock(
-            side_effect=CannotConnect("Connection refused")
-        )
+        mock_api_instance.fetch_day_range = AsyncMock(side_effect=CannotConnect("Connection refused"))
         mock_api_class.return_value = mock_api_instance
 
         from custom_components.electric_ireland_insights.coordinator import (
@@ -471,13 +459,13 @@ async def test_empty_data_no_statistics(recorder_mock, hass, mock_config_entry):
     """Test that empty API response inserts no statistics and raises no error."""
     mock_config_entry.add_to_hass(hass)
 
-    with patch(
-        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
-        return_value={},
-    ), patch(
-        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
-    ) as mock_api_class, patch(
-        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
     ):
         mock_api_instance = AsyncMock()
         mock_api_instance.fetch_day_range = AsyncMock(return_value=([], None))
@@ -513,24 +501,20 @@ async def test_empty_data_no_statistics(recorder_mock, hass, mock_config_entry):
 # ---------------------------------------------------------------------------
 
 
-async def test_imports_continue_without_entity_listeners(
-    recorder_mock, hass, mock_config_entry
-):
+async def test_imports_continue_without_entity_listeners(recorder_mock, hass, mock_config_entry):
     """Test that coordinator fetches data even when no entities are subscribed."""
     mock_config_entry.add_to_hass(hass)
 
-    with patch(
-        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
-        return_value={},
-    ), patch(
-        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
-    ) as mock_api_class, patch(
-        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
     ):
         mock_api_instance = AsyncMock()
-        mock_api_instance.fetch_day_range = AsyncMock(
-            return_value=(make_datapoints(1), None)
-        )
+        mock_api_instance.fetch_day_range = AsyncMock(return_value=(make_datapoints(1), None))
         mock_api_class.return_value = mock_api_instance
 
         from custom_components.electric_ireland_insights.coordinator import (
@@ -566,23 +550,22 @@ async def test_cached_ids_skip_html_discovery(recorder_mock, hass, mock_config_e
         },
     )
 
-    with patch(
-        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
-        return_value={},
-    ), patch(
-        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
-    ) as mock_api_class, patch(
-        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
     ):
         mock_api_instance = AsyncMock()
-        mock_api_instance.fetch_day_range = AsyncMock(
-            return_value=(make_datapoints(7), None)
-        )
+        mock_api_instance.fetch_day_range = AsyncMock(return_value=(make_datapoints(7), None))
         mock_api_class.return_value = mock_api_instance
 
         from custom_components.electric_ireland_insights.coordinator import (
             ElectricIrelandCoordinator,
         )
+
         coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
         await coordinator._async_update_data()
 
@@ -596,13 +579,13 @@ async def test_no_cached_ids_triggers_full_login(recorder_mock, hass, mock_confi
     """Test that missing cached IDs trigger full login with HTML discovery."""
     mock_config_entry.add_to_hass(hass)
 
-    with patch(
-        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
-        return_value={},
-    ), patch(
-        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
-    ) as mock_api_class, patch(
-        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
     ):
         mock_api_instance = AsyncMock()
         mock_api_instance.fetch_day_range = AsyncMock(
@@ -613,6 +596,7 @@ async def test_no_cached_ids_triggers_full_login(recorder_mock, hass, mock_confi
         from custom_components.electric_ireland_insights.coordinator import (
             ElectricIrelandCoordinator,
         )
+
         coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
         await coordinator._async_update_data()
 
@@ -634,13 +618,13 @@ async def test_cached_ids_fallback_to_full_login(recorder_mock, hass, mock_confi
         },
     )
 
-    with patch(
-        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
-        return_value={},
-    ), patch(
-        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
-    ) as mock_api_class, patch(
-        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
     ):
         mock_api_instance = AsyncMock()
         mock_api_instance.fetch_day_range = AsyncMock(
@@ -651,35 +635,36 @@ async def test_cached_ids_fallback_to_full_login(recorder_mock, hass, mock_confi
         from custom_components.electric_ireland_insights.coordinator import (
             ElectricIrelandCoordinator,
         )
-        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
-        result = await coordinator._async_update_data()
 
-        assert hass.config_entries.async_get_entry(mock_config_entry.entry_id).data.get("partner_id") == "NEW_P1", \
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+        await coordinator._async_update_data()
+
+        assert hass.config_entries.async_get_entry(mock_config_entry.entry_id).data.get("partner_id") == "NEW_P1", (
             "New meter IDs from fallback should be stored in entry.data"
+        )
 
 
 async def test_fallback_updates_cached_ids(recorder_mock, hass, mock_config_entry):
     """Test that fallback discovery updates cached IDs in entry.data."""
     mock_config_entry.add_to_hass(hass)
 
-    with patch(
-        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
-        return_value={},
-    ), patch(
-        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
-    ) as mock_api_class, patch(
-        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
     ):
         mock_api_instance = AsyncMock()
         new_ids = {"partner": "P_NEW", "contract": "C_NEW", "premise": "PR_NEW"}
-        mock_api_instance.fetch_day_range = AsyncMock(
-            return_value=(make_datapoints(30), new_ids)
-        )
+        mock_api_instance.fetch_day_range = AsyncMock(return_value=(make_datapoints(30), new_ids))
         mock_api_class.return_value = mock_api_instance
 
         from custom_components.electric_ireland_insights.coordinator import (
             ElectricIrelandCoordinator,
         )
+
         coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
         await coordinator._async_update_data()
 
@@ -691,7 +676,6 @@ async def test_fallback_updates_cached_ids(recorder_mock, hass, mock_config_entr
 
 async def test_api_redirect_clears_and_falls_back(recorder_mock, hass, mock_config_entry):
     """Test that a redirect-to-login response causes fallback to full login."""
-    from custom_components.electric_ireland_insights.exceptions import CachedIdsInvalid
     mock_config_entry.add_to_hass(hass)
     hass.config_entries.async_update_entry(
         mock_config_entry,
@@ -703,13 +687,13 @@ async def test_api_redirect_clears_and_falls_back(recorder_mock, hass, mock_conf
         },
     )
 
-    with patch(
-        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
-        return_value={},
-    ), patch(
-        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
-    ) as mock_api_class, patch(
-        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
     ):
         mock_api_instance = AsyncMock()
         mock_api_instance.fetch_day_range = AsyncMock(
@@ -720,6 +704,7 @@ async def test_api_redirect_clears_and_falls_back(recorder_mock, hass, mock_conf
         from custom_components.electric_ireland_insights.coordinator import (
             ElectricIrelandCoordinator,
         )
+
         coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
         result = await coordinator._async_update_data()
         assert result is not None
@@ -729,61 +714,62 @@ async def test_empty_data_subsequent_run_no_update(recorder_mock, hass, mock_con
     """Test that empty data on subsequent runs doesn't update last_import."""
     mock_config_entry.add_to_hass(hass)
 
-    with patch(
-        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
-        return_value={"some_stat": [{"sum": 100.0}]},
-    ), patch(
-        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
-    ) as mock_api_class, patch(
-        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={"some_stat": [{"sum": 100.0}]},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
     ):
         mock_api_instance = AsyncMock()
-        mock_api_instance.fetch_day_range = AsyncMock(
-            return_value=([], None)
-        )
+        mock_api_instance.fetch_day_range = AsyncMock(return_value=([], None))
         mock_api_class.return_value = mock_api_instance
 
         from custom_components.electric_ireland_insights.coordinator import (
             ElectricIrelandCoordinator,
         )
+
         coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
 
-        from datetime import datetime as dt, timezone
+        from datetime import UTC
+        from datetime import datetime as dt
+
         coordinator.data = {
-            "last_import": dt(2026, 3, 28, 12, 0, tzinfo=timezone.utc),
+            "last_import": dt(2026, 3, 28, 12, 0, tzinfo=UTC),
             "datapoint_count": 24,
-            "latest_data_timestamp": dt(2026, 3, 26, 0, 0, tzinfo=timezone.utc),
+            "latest_data_timestamp": dt(2026, 3, 26, 0, 0, tzinfo=UTC),
             "import_error": None,
         }
         coordinator._has_imported_before = True
 
         result = await coordinator._async_update_data()
 
-        assert result["last_import"] == dt(2026, 3, 28, 12, 0, tzinfo=timezone.utc), \
+        assert result["last_import"] == dt(2026, 3, 28, 12, 0, tzinfo=UTC), (
             "Empty subsequent run should not update last_import"
+        )
 
 
 async def test_empty_data_restart_returns_synthetic(recorder_mock, hass, mock_config_entry):
     """Test empty data after restart returns synthetic stale dict when _has_imported_before is True."""
     mock_config_entry.add_to_hass(hass)
 
-    with patch(
-        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
-        return_value={"some_stat": [{"sum": 100.0}]},
-    ), patch(
-        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
-    ) as mock_api_class, patch(
-        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={"some_stat": [{"sum": 100.0}]},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
     ):
         mock_api_instance = AsyncMock()
-        mock_api_instance.fetch_day_range = AsyncMock(
-            return_value=([], None)
-        )
+        mock_api_instance.fetch_day_range = AsyncMock(return_value=([], None))
         mock_api_class.return_value = mock_api_instance
 
         from custom_components.electric_ireland_insights.coordinator import (
             ElectricIrelandCoordinator,
         )
+
         coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
         assert coordinator.data is None
 
@@ -799,21 +785,20 @@ async def test_connection_restored_logging(recorder_mock, hass, mock_config_entr
     """Test that _last_update_success transitions from False to True on success."""
     mock_config_entry.add_to_hass(hass)
 
-    with patch(
-        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
-        return_value={},
-    ), patch(
-        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
-    ) as mock_api_class, patch(
-        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
     ):
         mock_api_instance = AsyncMock()
-        mock_api_instance.fetch_day_range = AsyncMock(
-            return_value=(make_datapoints(1), None)
-        )
+        mock_api_instance.fetch_day_range = AsyncMock(return_value=(make_datapoints(1), None))
         mock_api_class.return_value = mock_api_instance
 
         from custom_components.electric_ireland_insights.coordinator import ElectricIrelandCoordinator
+
         coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
         coordinator._last_update_success = False  # simulate prior failure
 
@@ -827,30 +812,32 @@ async def test_connection_restored_logging(recorder_mock, hass, mock_config_entr
 async def test_update_failed_reraise(recorder_mock, hass, mock_config_entry):
     """Test UpdateFailed from _insert_statistics is re-raised through except block."""
     from homeassistant.helpers.update_coordinator import UpdateFailed
+
     mock_config_entry.add_to_hass(hass)
 
-    with patch(
-        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
-        return_value={},
-    ), patch(
-        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
-    ) as mock_api_class, patch(
-        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
     ):
         mock_api_instance = AsyncMock()
-        mock_api_instance.fetch_day_range = AsyncMock(
-            return_value=(make_datapoints(1), None)
-        )
+        mock_api_instance.fetch_day_range = AsyncMock(return_value=(make_datapoints(1), None))
         mock_api_class.return_value = mock_api_instance
 
         from custom_components.electric_ireland_insights.coordinator import ElectricIrelandCoordinator
+
         coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
 
-        with patch.object(coordinator, "_insert_statistics",
-                          new_callable=AsyncMock,
-                          side_effect=UpdateFailed("insert failed")):
-            with pytest.raises(UpdateFailed):
-                await coordinator._async_update_data()
+        with (
+            patch.object(
+                coordinator, "_insert_statistics", new_callable=AsyncMock, side_effect=UpdateFailed("insert failed")
+            ),
+            pytest.raises(UpdateFailed),
+        ):
+            await coordinator._async_update_data()
 
         assert coordinator._last_update_success is False
 
@@ -858,23 +845,23 @@ async def test_update_failed_reraise(recorder_mock, hass, mock_config_entry):
 async def test_unexpected_exception_wrapped(recorder_mock, hass, mock_config_entry):
     """Test unexpected exception from fetch_day_range is wrapped in UpdateFailed."""
     from homeassistant.helpers.update_coordinator import UpdateFailed
+
     mock_config_entry.add_to_hass(hass)
 
-    with patch(
-        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
-        return_value={},
-    ), patch(
-        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
-    ) as mock_api_class, patch(
-        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
     ):
         mock_api_instance = AsyncMock()
-        mock_api_instance.fetch_day_range = AsyncMock(
-            side_effect=RuntimeError("unexpected boom")
-        )
+        mock_api_instance.fetch_day_range = AsyncMock(side_effect=RuntimeError("unexpected boom"))
         mock_api_class.return_value = mock_api_instance
 
         from custom_components.electric_ireland_insights.coordinator import ElectricIrelandCoordinator
+
         coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
 
         with pytest.raises(UpdateFailed, match="unexpected boom"):
@@ -887,26 +874,22 @@ async def test_latest_timestamp_none_when_interval_zero(recorder_mock, hass, moc
     """Test latest_data_timestamp is None when all intervalEnd are 0 (falsy max)."""
     mock_config_entry.add_to_hass(hass)
 
-    zero_ts_datapoints = [
-        {"consumption": 0.5, "cost": 0.1, "intervalEnd": 0}
-        for _ in range(3)
-    ]
+    zero_ts_datapoints = [{"consumption": 0.5, "cost": 0.1, "intervalEnd": 0} for _ in range(3)]
 
-    with patch(
-        "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
-        return_value={},
-    ), patch(
-        "custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI"
-    ) as mock_api_class, patch(
-        "custom_components.electric_ireland_insights.coordinator.async_create_clientsession"
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
     ):
         mock_api_instance = AsyncMock()
-        mock_api_instance.fetch_day_range = AsyncMock(
-            return_value=(zero_ts_datapoints, None)
-        )
+        mock_api_instance.fetch_day_range = AsyncMock(return_value=(zero_ts_datapoints, None))
         mock_api_class.return_value = mock_api_instance
 
         from custom_components.electric_ireland_insights.coordinator import ElectricIrelandCoordinator
+
         coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
 
         with patch.object(coordinator, "_insert_statistics", new_callable=AsyncMock):

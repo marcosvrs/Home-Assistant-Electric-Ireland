@@ -1,12 +1,13 @@
 """Electric Ireland Insights integration."""
+
 from __future__ import annotations
 
 import logging
 
+import homeassistant.helpers.config_validation as cv
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-import homeassistant.helpers.config_validation as cv
 
 from .const import DOMAIN
 from .coordinator import ElectricIrelandCoordinator
@@ -32,9 +33,7 @@ async def async_migrate_entry(hass: HomeAssistant, config_entry: ConfigEntry) ->
             "contract_id": None,
             "premise_id": None,
         }
-        hass.config_entries.async_update_entry(
-            config_entry, data=new_data, version=2
-        )
+        hass.config_entries.async_update_entry(config_entry, data=new_data, version=2)
     return True
 
 

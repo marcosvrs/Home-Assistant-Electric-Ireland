@@ -1,4 +1,5 @@
 """Constants for Electric Ireland Insights."""
+
 from __future__ import annotations
 
 from datetime import timedelta

@@ -64,9 +64,7 @@ def mock_api():
     api_mock = AsyncMock()
     api_instance = AsyncMock()
     api_instance.fetch_day_range = AsyncMock(return_value=(SAMPLE_DATAPOINTS, None))
-    api_instance.validate_credentials = AsyncMock(
-        return_value={"partner": "p1", "contract": "c1", "premise": "pr1"}
-    )
+    api_instance.validate_credentials = AsyncMock(return_value={"partner": "p1", "contract": "c1", "premise": "pr1"})
     api_mock.return_value = api_instance
 
     with patch(

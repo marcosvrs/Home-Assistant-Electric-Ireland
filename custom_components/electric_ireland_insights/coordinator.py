@@ -1,4 +1,5 @@
 """Coordinator for Electric Ireland Insights."""
+
 from __future__ import annotations
 
 import logging
@@ -6,7 +7,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 import aiohttp
-
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
 from homeassistant.components.recorder.statistics import (
@@ -50,9 +50,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
         )
         self._last_update_success = True
         self._has_imported_before = False
-        self._session = async_create_clientsession(
-            hass, cookie_jar=aiohttp.CookieJar()
-        )
+        self._session = async_create_clientsession(hass, cookie_jar=aiohttp.CookieJar())
 
     async def _async_update_data(self) -> CoordinatorData:
         session = self._session
@@ -81,11 +79,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
 
             entry_data = self.config_entry.data
             cached_ids: MeterIds | None = None
-            if (
-                entry_data.get("partner_id")
-                and entry_data.get("contract_id")
-                and entry_data.get("premise_id")
-            ):
+            if entry_data.get("partner_id") and entry_data.get("contract_id") and entry_data.get("premise_id"):
                 cached_ids = {
                     "partner": entry_data["partner_id"],
                     "contract": entry_data["contract_id"],
@@ -103,9 +97,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
                     "contract_id": new_meter_ids["contract"],
                     "premise_id": new_meter_ids["premise"],
                 }
-                self.hass.config_entries.async_update_entry(
-                    self.config_entry, data=new_data
-                )
+                self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
                 _LOGGER.debug(
                     "Updated cached meter IDs: partner=%s",
                     new_meter_ids["partner"],
@@ -115,18 +107,22 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
                 if self._has_imported_before:
                     if self.data is not None:
                         return _mark_success(self.data)
-                    return _mark_success({
-                        "last_import": None,
+                    return _mark_success(
+                        {
+                            "last_import": None,
+                            "datapoint_count": 0,
+                            "latest_data_timestamp": None,
+                            "import_error": "No new data available",
+                        }
+                    )
+                return _mark_success(
+                    {
+                        "last_import": utcnow(),
                         "datapoint_count": 0,
                         "latest_data_timestamp": None,
-                        "import_error": "No new data available",
-                    })
-                return _mark_success({
-                    "last_import": utcnow(),
-                    "datapoint_count": 0,
-                    "latest_data_timestamp": None,
-                    "import_error": None,
-                })
+                        "import_error": None,
+                    }
+                )
 
             self._has_imported_before = True
 
@@ -144,14 +140,14 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
             )
 
             last_ts = max((dp["intervalEnd"] for dp in datapoints), default=None)
-            return _mark_success({
-                "last_import": utcnow(),
-                "datapoint_count": len(datapoints),
-                "latest_data_timestamp": (
-                    datetime.fromtimestamp(last_ts, tz=UTC) if last_ts else None
-                ),
-                "import_error": None,
-            })
+            return _mark_success(
+                {
+                    "last_import": utcnow(),
+                    "datapoint_count": len(datapoints),
+                    "latest_data_timestamp": (datetime.fromtimestamp(last_ts, tz=UTC) if last_ts else None),
+                    "import_error": None,
+                }
+            )
 
         except InvalidAuth as err:
             self._last_update_success = False
@@ -185,9 +181,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
             if value is None:
                 continue
             interval_end = dp["intervalEnd"]
-            start = datetime.fromtimestamp(interval_end, tz=UTC).replace(
-                minute=0, second=0, microsecond=0
-            )
+            start = datetime.fromtimestamp(interval_end, tz=UTC).replace(minute=0, second=0, microsecond=0)
             filtered.append((start, float(value)))
 
         if not filtered:

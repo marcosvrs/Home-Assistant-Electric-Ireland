@@ -2,47 +2,84 @@ name: Validate
 
 on:
   push:
+    branches:
+      - master
+      - feature/**
+      - test/**
   pull_request:
   schedule:
     - cron: "0 0 * * *"
   workflow_dispatch:
 
+concurrency:
+  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}
+
 jobs:
+  validate-hassfest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hassfest validation
+        uses: home-assistant/actions/hassfest@master
+
   validate-hacs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: HASS validation
-        uses: home-assistant/actions/hassfest@master
       - name: HACS validation
         uses: hacs/action@main
         with:
           category: integration
 
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install ruff
+        run: pip install ruff
+      - name: Ruff check
+        run: ruff check custom_components/ tests/
+      - name: Ruff format check
+        run: ruff format --check custom_components/ tests/
+
+  mypy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install mypy types-beautifulsoup4
+      - name: Run mypy strict
+        run: |
+          mypy custom_components/electric_ireland_insights/ \
+            --strict \
+            --no-warn-return-any \
+            --ignore-missing-imports
+
   tests:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-
+          cache: pip
+          cache-dependency-path: pyproject.toml
       - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install \
-            pytest \
-            pytest-homeassistant-custom-component \
-            pytest-asyncio \
-            pytest-cov \
-            aioresponses \
-            beautifulsoup4
-
+        run: pip install ".[dev]"
       - name: Run tests with coverage
         run: |
           pytest tests/ \
@@ -50,27 +87,3 @@ jobs:
             --cov-report=term-missing \
             --cov-fail-under=95 \
             -q
-
-  mypy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install \
-            mypy \
-            types-beautifulsoup4
-
-      - name: Run mypy strict
-        run: |
-          mypy custom_components/electric_ireland_insights/ \
-            --strict \
-            --no-warn-return-any \
-            --ignore-missing-imports

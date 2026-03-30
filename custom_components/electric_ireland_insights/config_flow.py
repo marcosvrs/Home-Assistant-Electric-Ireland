@@ -1,10 +1,11 @@
 """Config flow for Electric Ireland Insights integration."""
+
 from __future__ import annotations
 
-import aiohttp
 import logging
 from typing import Any
 
+import aiohttp
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
@@ -27,16 +28,12 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 class ElectricIrelandInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg,misc]  # HA ConfigFlow metaclass requires domain=; misc covers TypedDict compatibility
     VERSION = 2
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         errors: dict[str, str] = {}
 
         if user_input is not None:
             try:
-                session = async_create_clientsession(
-                    self.hass, cookie_jar=aiohttp.CookieJar()
-                )
+                session = async_create_clientsession(self.hass, cookie_jar=aiohttp.CookieJar())
                 api = ElectricIrelandAPI(
                     user_input["username"],
                     user_input["password"],
@@ -67,9 +64,7 @@ class ElectricIrelandInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN
             errors=errors,
         )
 
-    async def async_step_account(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_account(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -99,9 +94,7 @@ class ElectricIrelandInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN
 
     async def _finish_flow(self, account_number: str) -> FlowResult:
         try:
-            session = async_create_clientsession(
-                self.hass, cookie_jar=aiohttp.CookieJar()
-            )
+            session = async_create_clientsession(self.hass, cookie_jar=aiohttp.CookieJar())
             api = ElectricIrelandAPI(
                 self._username,
                 self._password,
@@ -132,23 +125,17 @@ class ElectricIrelandInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN
             },
         )
 
-    async def async_step_reauth(
-        self, entry_data: dict[str, Any]
-    ) -> FlowResult:
+    async def async_step_reauth(self, entry_data: dict[str, Any]) -> FlowResult:
         return await self.async_step_reauth_confirm()
 
-    async def async_step_reauth_confirm(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_reauth_confirm(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         errors: dict[str, str] = {}
         reauth_entry = self._get_reauth_entry()
 
         if user_input is not None:
             new_data = {**reauth_entry.data, "password": user_input["password"]}
             try:
-                session = async_create_clientsession(
-                    self.hass, cookie_jar=aiohttp.CookieJar()
-                )
+                session = async_create_clientsession(self.hass, cookie_jar=aiohttp.CookieJar())
                 api = ElectricIrelandAPI(
                     new_data["username"],
                     new_data["password"],
@@ -183,9 +170,7 @@ class ElectricIrelandInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN
             errors=errors,
         )
 
-    async def async_step_reconfigure(
-        self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         errors: dict[str, str] = {}
         entry = self._get_reconfigure_entry()
 
@@ -195,9 +180,7 @@ class ElectricIrelandInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN
             force_rediscovery = user_input.get("force_rediscovery", False)
 
             try:
-                session = async_create_clientsession(
-                    self.hass, cookie_jar=aiohttp.CookieJar()
-                )
+                session = async_create_clientsession(self.hass, cookie_jar=aiohttp.CookieJar())
                 api = ElectricIrelandAPI(
                     username,
                     password,

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 
@@ -17,17 +16,12 @@ BASE_URL = "https://youraccountonline.electricireland.ie"
 
 
 class ElectricIrelandAPI:
-
-    def __init__(
-        self, username: str, password: str, account_number: str | None = None
-    ) -> None:
+    def __init__(self, username: str, password: str, account_number: str | None = None) -> None:
         self._username = username
         self._password = password
         self._account_number = account_number
 
-    async def discover_accounts(
-        self, session: aiohttp.ClientSession
-    ) -> list[dict[str, str]]:
+    async def discover_accounts(self, session: aiohttp.ClientSession) -> list[dict[str, str]]:
         """Scrape the post-login page and return all electricity account numbers.
 
         Returns a list of dicts with keys: account_number, display_name.
@@ -72,8 +66,8 @@ class ElectricIrelandAPI:
             raise
         except aiohttp.ClientError as err:
             raise CannotConnect(str(err)) from err
-        except asyncio.TimeoutError:
-            raise CannotConnect("Connection timed out")
+        except TimeoutError as err:
+            raise CannotConnect("Connection timed out") from err
 
         soup2 = BeautifulSoup(html2, "html.parser")
         account_divs = soup2.find_all("div", {"class": "my-accounts__item"})
@@ -96,9 +90,7 @@ class ElectricIrelandAPI:
             # Build display name from account number + any label
             label_el = account_div.find("h3", {"class": "account-label"})
             label = label_el.text.strip() if label_el else None
-            display_name = f"{account_number}" + (
-                f" ({label})" if label else ""
-            )
+            display_name = f"{account_number}" + (f" ({label})" if label else "")
 
             accounts.append(
                 {
@@ -113,9 +105,7 @@ class ElectricIrelandAPI:
         LOGGER.info("Discovered %d account(s)", len(accounts))
         return accounts
 
-    async def validate_credentials(
-        self, session: aiohttp.ClientSession
-    ) -> MeterIds:
+    async def validate_credentials(self, session: aiohttp.ClientSession) -> MeterIds:
         client = await self._login(session)
         return {
             "partner": client._partner,
@@ -136,9 +126,7 @@ class ElectricIrelandAPI:
             try:
                 client = await self._login_cached(session, meter_ids)
             except CachedIdsInvalid as err:
-                LOGGER.warning(
-                    "Cached IDs failed (%s), falling back to full login", err
-                )
+                LOGGER.warning("Cached IDs failed (%s), falling back to full login", err)
                 client = await self._login(session)
                 discovered_ids = {
                     "partner": client._partner,
@@ -155,9 +143,7 @@ class ElectricIrelandAPI:
             }
 
         now = datetime.now(UTC)
-        yesterday = datetime(now.year, now.month, now.day, tzinfo=UTC) - timedelta(
-            days=1
-        )
+        yesterday = datetime(now.year, now.month, now.day, tzinfo=UTC) - timedelta(days=1)
 
         all_datapoints: list[ElectricIrelandDatapoint] = []
         for i in range(lookback_days, 0, -1):
@@ -173,9 +159,7 @@ class ElectricIrelandAPI:
 
         return all_datapoints, discovered_ids
 
-    async def _login_cached(
-        self, session: aiohttp.ClientSession, meter_ids: MeterIds
-    ) -> MeterInsightClient:
+    async def _login_cached(self, session: aiohttp.ClientSession, meter_ids: MeterIds) -> MeterInsightClient:
         timeout = aiohttp.ClientTimeout(total=30)
 
         try:
@@ -191,9 +175,7 @@ class ElectricIrelandAPI:
             source = source_val if isinstance(source_val, str) else None
 
             if not source or not rvt:
-                raise CachedIdsInvalid(
-                    "Could not extract login tokens during cached login"
-                )
+                raise CachedIdsInvalid("Could not extract login tokens during cached login")
 
             async with session.post(
                 f"{BASE_URL}/",
@@ -222,12 +204,8 @@ class ElectricIrelandAPI:
             ) as res3:
                 html3 = await res3.text()
                 if "modelData" not in html3:
-                    LOGGER.warning(
-                        "Cached IDs may be stale — OnEvent didn't return insights page"
-                    )
-                    raise CachedIdsInvalid(
-                        "Insights modelData missing from OnEvent response"
-                    )
+                    LOGGER.warning("Cached IDs may be stale — OnEvent didn't return insights page")
+                    raise CachedIdsInvalid("Insights modelData missing from OnEvent response")
 
             LOGGER.debug(
                 "Cached login: partner=%s, contract=%s, premise=%s",
@@ -240,20 +218,16 @@ class ElectricIrelandAPI:
         except (CachedIdsInvalid, InvalidAuth):
             raise
         except aiohttp.ClientError as err:
-            raise CachedIdsInvalid(
-                f"Network error during cached login: {err}"
-            ) from err
-        except asyncio.TimeoutError:
-            raise CachedIdsInvalid("Timeout during cached login")
+            raise CachedIdsInvalid(f"Network error during cached login: {err}") from err
+        except TimeoutError as err:
+            raise CachedIdsInvalid("Timeout during cached login") from err
 
     async def _login(self, session: aiohttp.ClientSession) -> MeterInsightClient:
         timeout = aiohttp.ClientTimeout(total=30)
 
         try:
             LOGGER.debug("Getting Source Token...")
-            async with session.get(
-                f"{BASE_URL}/", timeout=timeout
-            ) as res1:
+            async with session.get(f"{BASE_URL}/", timeout=timeout) as res1:
                 res1.raise_for_status()
                 html1 = await res1.text()
                 rvt_cookie = res1.cookies.get("rvt")
@@ -289,39 +263,27 @@ class ElectricIrelandAPI:
             account_divs = soup2.find_all("div", {"class": "my-accounts__item"})
             target_account = None
             for account_div in account_divs:
-                account_number_el = account_div.find(
-                    "p", {"class": "account-number"}
-                )
+                account_number_el = account_div.find("p", {"class": "account-number"})
                 if not account_number_el:
                     continue
                 account_number = account_number_el.text.strip()
                 if account_number != self._account_number:
-                    LOGGER.debug(
-                        "Skipping account %s as it is not target", account_number
-                    )
+                    LOGGER.debug("Skipping account %s as it is not target", account_number)
                     continue
 
-                is_elec_divs = account_div.find_all(
-                    "h2", {"class": "account-electricity-icon"}
-                )
+                is_elec_divs = account_div.find_all("h2", {"class": "account-electricity-icon"})
                 if len(is_elec_divs) != 1:
-                    LOGGER.info(
-                        "Found account %s but is not Electricity", account_number
-                    )
+                    LOGGER.info("Found account %s but is not Electricity", account_number)
                     continue
 
                 target_account = account_div
                 break
 
             if not target_account:
-                raise AccountNotFound(
-                    f"Account {self._account_number} not found"
-                )
+                raise AccountNotFound(f"Account {self._account_number} not found")
 
             LOGGER.debug("Navigating to Insights page...")
-            event_form = target_account.find(
-                "form", {"action": "/Accounts/OnEvent"}
-            )
+            event_form = target_account.find("form", {"action": "/Accounts/OnEvent"})
             req3: dict[str, str] = {
                 "triggers_event": "AccountSelection.ToInsights",
             }
@@ -340,9 +302,7 @@ class ElectricIrelandAPI:
             model_data = soup3.find("div", {"id": "modelData"})
 
             if not model_data:
-                raise InvalidAuth(
-                    "Login succeeded but insights page not accessible"
-                )
+                raise InvalidAuth("Login succeeded but insights page not accessible")
 
             assert isinstance(model_data, Tag)
 
@@ -351,9 +311,7 @@ class ElectricIrelandAPI:
             premise = model_data.get("data-premise")
 
             if not all([partner, contract, premise]):
-                raise InvalidAuth(
-                    "Login succeeded but insights page not accessible"
-                )
+                raise InvalidAuth("Login succeeded but insights page not accessible")
 
             assert isinstance(partner, str)
             assert isinstance(contract, str)
@@ -365,20 +323,17 @@ class ElectricIrelandAPI:
                 contract,
                 premise,
             )
-            return MeterInsightClient(
-                session, {"partner": partner, "contract": contract, "premise": premise}
-            )
+            return MeterInsightClient(session, {"partner": partner, "contract": contract, "premise": premise})
 
         except (InvalidAuth, CannotConnect, AccountNotFound):
             raise
         except aiohttp.ClientError as err:
             raise CannotConnect(str(err)) from err
-        except asyncio.TimeoutError:
-            raise CannotConnect("Connection timed out")
+        except TimeoutError as err:
+            raise CannotConnect("Connection timed out") from err
 
 
 class MeterInsightClient:
-
     def __init__(self, session: aiohttp.ClientSession, meter_ids: MeterIds) -> None:
         self._session = session
         self._partner = meter_ids["partner"]
@@ -389,16 +344,11 @@ class MeterInsightClient:
         date_str = target_date.strftime("%Y-%m-%d")
         LOGGER.debug("Getting hourly data for %s...", date_str)
 
-        url = (
-            f"{BASE_URL}/MeterInsight/"
-            f"{self._partner}/{self._contract}/{self._premise}/hourly-usage"
-        )
+        url = f"{BASE_URL}/MeterInsight/{self._partner}/{self._contract}/{self._premise}/hourly-usage"
         timeout = aiohttp.ClientTimeout(total=30)
 
         try:
-            async with self._session.get(
-                url, params={"date": date_str}, timeout=timeout
-            ) as response:
+            async with self._session.get(url, params={"date": date_str}, timeout=timeout) as response:
                 if response.status in (401, 403, 404):
                     raise CachedIdsInvalid(f"API returned {response.status}")
 
@@ -412,17 +362,13 @@ class MeterInsightClient:
                         content_type,
                         body[:500],
                     )
-                    raise CachedIdsInvalid(
-                        "Non-JSON response from MeterInsight API — session may be expired"
-                    )
+                    raise CachedIdsInvalid("Non-JSON response from MeterInsight API — session may be expired")
 
                 try:
                     data = await response.json()
                 except Exception as err:
                     body = await response.text()
-                    LOGGER.error(
-                        "Failed to parse JSON: %s. Response: %s", err, body[:500]
-                    )
+                    LOGGER.error("Failed to parse JSON: %s. Response: %s", err, body[:500])
                     return []
 
         except CachedIdsInvalid:

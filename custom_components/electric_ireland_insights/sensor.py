@@ -1,9 +1,10 @@
 """Diagnostic sensor entities for Electric Ireland Insights."""
+
 from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -65,8 +66,7 @@ async def async_setup_entry(
     coordinator = config_entry.runtime_data
     account = config_entry.data["account_number"]
     async_add_entities(
-        ElectricIrelandDiagnosticSensor(coordinator, description, account)
-        for description in DIAGNOSTIC_SENSORS
+        ElectricIrelandDiagnosticSensor(coordinator, description, account) for description in DIAGNOSTIC_SENSORS
     )
 
 
