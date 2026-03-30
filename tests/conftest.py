@@ -5,6 +5,18 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+# Disable pycares' global _run_safe_shutdown_loop daemon thread.
+# pycares 5.x spawns a permanent daemon thread when any Channel is destroyed.
+# pytest-homeassistant-custom-component >=0.13.316 whitelists this thread in
+# verify_cleanup, but 0.13.205 (used on Python 3.12 CI) does not.
+# Tests never resolve real DNS, so the shutdown manager is unnecessary.
+try:
+    from pycares import _ChannelShutdownManager  # type: ignore[attr-defined]
+
+    _ChannelShutdownManager.start = lambda self: None  # type: ignore[method-assign]
+except (ImportError, AttributeError):
+    pass
+
 
 SAMPLE_DATAPOINTS = [
     {"consumption": 0.222, "cost": 0.04, "intervalEnd": 1774224000},

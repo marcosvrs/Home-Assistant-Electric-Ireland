@@ -58,8 +58,7 @@ async def test_validate_credentials_success() -> None:
     mock_client = _make_mock_client("PARTNER1", "CONTRACT1", "PREMISE1")
 
     with patch.object(api, "_login", new_callable=AsyncMock, return_value=mock_client):
-        async with aiohttp.ClientSession() as session:
-            result = await api.validate_credentials(session)
+        result = await api.validate_credentials(MagicMock())
 
     assert result == {
         "partner": "PARTNER1",
@@ -75,9 +74,8 @@ async def test_validate_credentials_raises_invalid_auth() -> None:
     with patch.object(
         api, "_login", new_callable=AsyncMock, side_effect=InvalidAuth("bad creds")
     ):
-        async with aiohttp.ClientSession() as session:
-            with pytest.raises(InvalidAuth, match="bad creds"):
-                await api.validate_credentials(session)
+        with pytest.raises(InvalidAuth, match="bad creds"):
+            await api.validate_credentials(MagicMock())
 
 
 @pytest.mark.asyncio
@@ -87,9 +85,8 @@ async def test_validate_credentials_raises_cannot_connect() -> None:
     with patch.object(
         api, "_login", new_callable=AsyncMock, side_effect=CannotConnect("timeout")
     ):
-        async with aiohttp.ClientSession() as session:
-            with pytest.raises(CannotConnect, match="timeout"):
-                await api.validate_credentials(session)
+        with pytest.raises(CannotConnect, match="timeout"):
+            await api.validate_credentials(MagicMock())
 
 
 @pytest.mark.asyncio
@@ -102,9 +99,8 @@ async def test_validate_credentials_raises_account_not_found() -> None:
         new_callable=AsyncMock,
         side_effect=AccountNotFound("not found"),
     ):
-        async with aiohttp.ClientSession() as session:
-            with pytest.raises(AccountNotFound, match="not found"):
-                await api.validate_credentials(session)
+        with pytest.raises(AccountNotFound, match="not found"):
+            await api.validate_credentials(MagicMock())
 
 
 @pytest.mark.asyncio
@@ -114,8 +110,7 @@ async def test_fetch_day_range_success() -> None:
     mock_client.get_data = AsyncMock(return_value=_make_day_data())
 
     with patch.object(api, "_login", new_callable=AsyncMock, return_value=mock_client):
-        async with aiohttp.ClientSession() as session:
-            result, discovered_ids = await api.fetch_day_range(session, lookback_days=3)
+        result, discovered_ids = await api.fetch_day_range(MagicMock(), lookback_days=3)
 
     assert len(result) == 72
     assert mock_client.get_data.call_count == 3
@@ -135,8 +130,7 @@ async def test_fetch_day_range_partial_failure() -> None:
     )
 
     with patch.object(api, "_login", new_callable=AsyncMock, return_value=mock_client):
-        async with aiohttp.ClientSession() as session:
-            result, discovered_ids = await api.fetch_day_range(session, lookback_days=3)
+        result, discovered_ids = await api.fetch_day_range(MagicMock(), lookback_days=3)
 
     assert len(result) == 48
     assert mock_client.get_data.call_count == 3
@@ -465,10 +459,9 @@ async def test_fetch_day_range_cached_fallback() -> None:
     with patch.object(api, "_login_cached", new_callable=AsyncMock,
                       side_effect=CachedIdsInvalid("stale")), \
          patch.object(api, "_login", new_callable=AsyncMock, return_value=mock_client):
-        async with aiohttp.ClientSession() as session:
-            result, discovered_ids = await api.fetch_day_range(
-                session, lookback_days=1, meter_ids=meter_ids
-            )
+        result, discovered_ids = await api.fetch_day_range(
+            MagicMock(), lookback_days=1, meter_ids=meter_ids
+        )
     assert len(result) == 24
     assert discovered_ids == {"partner": "NEW_P", "contract": "NEW_C", "premise": "NEW_PR"}
 
@@ -583,9 +576,8 @@ async def test_fetch_day_range_propagates_cached_ids_invalid() -> None:
     mock_client.get_data = AsyncMock(side_effect=CachedIdsInvalid("stale IDs"))
 
     with patch.object(api, "_login", new_callable=AsyncMock, return_value=mock_client):
-        async with aiohttp.ClientSession() as session:
-            with pytest.raises(CachedIdsInvalid, match="stale IDs"):
-                await api.fetch_day_range(session, lookback_days=2)
+        with pytest.raises(CachedIdsInvalid, match="stale IDs"):
+            await api.fetch_day_range(MagicMock(), lookback_days=2)
 
 
 @pytest.mark.asyncio
@@ -596,9 +588,8 @@ async def test_fetch_day_range_propagates_invalid_auth() -> None:
     mock_client.get_data = AsyncMock(side_effect=InvalidAuth("session expired"))
 
     with patch.object(api, "_login", new_callable=AsyncMock, return_value=mock_client):
-        async with aiohttp.ClientSession() as session:
-            with pytest.raises(InvalidAuth, match="session expired"):
-                await api.fetch_day_range(session, lookback_days=2)
+        with pytest.raises(InvalidAuth, match="session expired"):
+            await api.fetch_day_range(MagicMock(), lookback_days=2)
 
 
 @pytest.mark.asyncio
@@ -615,8 +606,7 @@ async def test_fetch_day_range_transient_errors_still_swallowed() -> None:
     )
 
     with patch.object(api, "_login", new_callable=AsyncMock, return_value=mock_client):
-        async with aiohttp.ClientSession() as session:
-            result, _ = await api.fetch_day_range(session, lookback_days=3)
+        result, _ = await api.fetch_day_range(MagicMock(), lookback_days=3)
 
     assert len(result) == 48
     assert mock_client.get_data.call_count == 3
