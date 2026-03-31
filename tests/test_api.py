@@ -1,6 +1,6 @@
 import json
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -98,39 +98,6 @@ async def test_validate_credentials_raises_account_not_found() -> None:
         pytest.raises(AccountNotFound, match="not found"),
     ):
         await api.validate_credentials(MagicMock())
-
-
-@pytest.mark.asyncio
-async def test_fetch_day_range_success() -> None:
-    api = ElectricIrelandAPI("user@test.com", "password", "951785073")
-    mock_client = _make_mock_client()
-    mock_client.get_data = AsyncMock(return_value=_make_day_data())
-
-    with patch.object(api, "_login", new_callable=AsyncMock, return_value=mock_client):
-        result, _discovered_ids = await api.fetch_day_range(MagicMock(), lookback_days=3)
-
-    assert len(result) == 72
-    assert mock_client.get_data.call_count == 3
-
-
-@pytest.mark.asyncio
-async def test_fetch_day_range_partial_failure() -> None:
-    api = ElectricIrelandAPI("user@test.com", "password", "951785073")
-    mock_client = _make_mock_client()
-
-    mock_client.get_data = AsyncMock(
-        side_effect=[
-            _make_day_data(1774224000),
-            Exception("server error"),
-            _make_day_data(1774396800),
-        ]
-    )
-
-    with patch.object(api, "_login", new_callable=AsyncMock, return_value=mock_client):
-        result, _discovered_ids = await api.fetch_day_range(MagicMock(), lookback_days=3)
-
-    assert len(result) == 48
-    assert mock_client.get_data.call_count == 3
 
 
 @pytest.mark.asyncio
@@ -288,59 +255,37 @@ async def test_login_timeout() -> None:
 
 
 # ---------------------------------------------------------------------------
-# _login_cached tests
+# _login with cached meter IDs
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_login_cached_success() -> None:
+async def test_login_with_cached_ids_skips_insights_parsing() -> None:
     api = ElectricIrelandAPI("user@test.com", "pass123", "951785073")
-    meter_ids = {"partner": "P1", "contract": "C1", "premise": "PR1"}
+    cached_ids = {"partner": "P1", "contract": "C1", "premise": "PR1"}
     with aioresponses_mock() as m:
         m.get(f"{BASE_URL}/", status=200, body=_LOGIN_PAGE_HTML, headers={"Set-Cookie": "rvt=rvttoken123; Path=/"})
-        m.post(f"{BASE_URL}/", status=200, body="<html>OK</html>")
-        m.post(f"{BASE_URL}/Accounts/OnEvent", status=200, body="<html>modelData present</html>")
+        m.post(f"{BASE_URL}/", status=200, body=_DASHBOARD_HTML)
+        m.post(f"{BASE_URL}/Accounts/OnEvent", status=200, body=_INSIGHTS_HTML)
         async with aiohttp.ClientSession() as session:
-            client = await api._login_cached(session, meter_ids)
+            client = await api._login(session, cached_meter_ids=cached_ids)
     assert client._partner == "P1"
     assert client._contract == "C1"
     assert client._premise == "PR1"
 
 
 @pytest.mark.asyncio
-async def test_login_cached_missing_tokens() -> None:
-
+async def test_login_without_cached_ids_discovers_from_insights() -> None:
     api = ElectricIrelandAPI("user@test.com", "pass123", "951785073")
-    meter_ids = {"partner": "P1", "contract": "C1", "premise": "PR1"}
     with aioresponses_mock() as m:
-        m.get(f"{BASE_URL}/", status=200, body=_LOGIN_PAGE_NO_SOURCE)
+        m.get(f"{BASE_URL}/", status=200, body=_LOGIN_PAGE_HTML, headers={"Set-Cookie": "rvt=rvttoken123; Path=/"})
+        m.post(f"{BASE_URL}/", status=200, body=_DASHBOARD_HTML)
+        m.post(f"{BASE_URL}/Accounts/OnEvent", status=200, body=_INSIGHTS_HTML)
         async with aiohttp.ClientSession() as session:
-            with pytest.raises(CachedIdsInvalid):
-                await api._login_cached(session, meter_ids)
-
-
-@pytest.mark.asyncio
-async def test_login_cached_client_error() -> None:
-
-    api = ElectricIrelandAPI("user@test.com", "pass123", "951785073")
-    meter_ids = {"partner": "P1", "contract": "C1", "premise": "PR1"}
-    with aioresponses_mock() as m:
-        m.get(f"{BASE_URL}/", exception=aiohttp.ClientError("network error"))
-        async with aiohttp.ClientSession() as session:
-            with pytest.raises(CachedIdsInvalid):
-                await api._login_cached(session, meter_ids)
-
-
-@pytest.mark.asyncio
-async def test_login_cached_timeout() -> None:
-
-    api = ElectricIrelandAPI("user@test.com", "pass123", "951785073")
-    meter_ids = {"partner": "P1", "contract": "C1", "premise": "PR1"}
-    with aioresponses_mock() as m:
-        m.get(f"{BASE_URL}/", exception=TimeoutError())
-        async with aiohttp.ClientSession() as session:
-            with pytest.raises(CachedIdsInvalid):
-                await api._login_cached(session, meter_ids)
+            client = await api._login(session)
+    assert client._partner == "PARTNER1"
+    assert client._contract == "CONTRACT1"
+    assert client._premise == "PREMISE1"
 
 
 # ---------------------------------------------------------------------------
@@ -425,27 +370,6 @@ async def test_discover_accounts_missing_tokens() -> None:
         async with aiohttp.ClientSession() as session:
             with pytest.raises(CannotConnect):
                 await api.discover_accounts(session)
-
-
-# ---------------------------------------------------------------------------
-# fetch_day_range fallback test
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_fetch_day_range_cached_fallback() -> None:
-
-    api = ElectricIrelandAPI("user@test.com", "pass123", "951785073")
-    meter_ids = {"partner": "OLD_P", "contract": "OLD_C", "premise": "OLD_PR"}
-    mock_client = _make_mock_client("NEW_P", "NEW_C", "NEW_PR")
-    mock_client.get_data = AsyncMock(return_value=_make_day_data())
-    with (
-        patch.object(api, "_login_cached", new_callable=AsyncMock, side_effect=CachedIdsInvalid("stale")),
-        patch.object(api, "_login", new_callable=AsyncMock, return_value=mock_client),
-    ):
-        result, discovered_ids = await api.fetch_day_range(MagicMock(), lookback_days=1, meter_ids=meter_ids)
-    assert len(result) == 24
-    assert discovered_ids == {"partner": "NEW_P", "contract": "NEW_C", "premise": "NEW_PR"}
 
 
 # ---------------------------------------------------------------------------
@@ -550,54 +474,6 @@ async def test_get_data_client_error() -> None:
 
 
 @pytest.mark.asyncio
-async def test_fetch_day_range_propagates_cached_ids_invalid() -> None:
-    """CachedIdsInvalid from get_data must propagate, not be swallowed."""
-    api = ElectricIrelandAPI("user@test.com", "password", "951785073")
-    mock_client = _make_mock_client()
-    mock_client.get_data = AsyncMock(side_effect=CachedIdsInvalid("stale IDs"))
-
-    with (
-        patch.object(api, "_login", new_callable=AsyncMock, return_value=mock_client),
-        pytest.raises(CachedIdsInvalid, match="stale IDs"),
-    ):
-        await api.fetch_day_range(MagicMock(), lookback_days=2)
-
-
-@pytest.mark.asyncio
-async def test_fetch_day_range_propagates_invalid_auth() -> None:
-    """InvalidAuth from get_data must propagate, not be swallowed."""
-    api = ElectricIrelandAPI("user@test.com", "password", "951785073")
-    mock_client = _make_mock_client()
-    mock_client.get_data = AsyncMock(side_effect=InvalidAuth("session expired"))
-
-    with (
-        patch.object(api, "_login", new_callable=AsyncMock, return_value=mock_client),
-        pytest.raises(InvalidAuth, match="session expired"),
-    ):
-        await api.fetch_day_range(MagicMock(), lookback_days=2)
-
-
-@pytest.mark.asyncio
-async def test_fetch_day_range_transient_errors_still_swallowed() -> None:
-    """Generic exceptions (transient) should still be caught and skipped."""
-    api = ElectricIrelandAPI("user@test.com", "password", "951785073")
-    mock_client = _make_mock_client()
-    mock_client.get_data = AsyncMock(
-        side_effect=[
-            _make_day_data(1774224000),
-            RuntimeError("transient failure"),
-            _make_day_data(1774396800),
-        ]
-    )
-
-    with patch.object(api, "_login", new_callable=AsyncMock, return_value=mock_client):
-        result, _ = await api.fetch_day_range(MagicMock(), lookback_days=3)
-
-    assert len(result) == 48
-    assert mock_client.get_data.call_count == 3
-
-
-@pytest.mark.asyncio
 async def test_discover_accounts_wraps_aiohttp_client_error() -> None:
     """aiohttp.ClientError in discover_accounts must become CannotConnect."""
     api = ElectricIrelandAPI("user@test.com", "password")
@@ -620,3 +496,175 @@ async def test_discover_accounts_wraps_timeout() -> None:
         async with aiohttp.ClientSession() as session:
             with pytest.raises(CannotConnect):
                 await api.discover_accounts(session)
+
+
+# ---------------------------------------------------------------------------
+# get_data 204 test (missing coverage)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_data_204_returns_empty_list() -> None:
+    """HTTP 204 from hourly-usage endpoint returns empty list."""
+    meter_ids = {"partner": "P1", "contract": "C1", "premise": "PR1"}
+    target_date = datetime(2026, 3, 23, tzinfo=UTC)
+    url = f"{BASE_URL}/MeterInsight/P1/C1/PR1/hourly-usage?date=2026-03-23"
+    with aioresponses_mock() as m:
+        m.get(url, status=204)
+        async with aiohttp.ClientSession() as session:
+            client = MeterInsightClient(session, meter_ids)
+            result = await client.get_data(target_date)
+    assert result == []
+
+
+# ---------------------------------------------------------------------------
+# authenticate tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_authenticate_with_cached_ids() -> None:
+    """authenticate() with cached IDs returns (cached_ids, None)."""
+    api = ElectricIrelandAPI("user@test.com", "pass123", "951785073")
+    cached_ids = {"partner": "P1", "contract": "C1", "premise": "PR1"}
+    with aioresponses_mock() as m:
+        m.get(
+            f"{BASE_URL}/",
+            status=200,
+            body=_LOGIN_PAGE_HTML,
+            headers={"Set-Cookie": "rvt=rvttoken123; Path=/"},
+        )
+        m.post(f"{BASE_URL}/", status=200, body=_DASHBOARD_HTML)
+        m.post(f"{BASE_URL}/Accounts/OnEvent", status=200, body=_INSIGHTS_HTML)
+        async with aiohttp.ClientSession() as session:
+            result = await api.authenticate(session, meter_ids=cached_ids)
+    assert result == (cached_ids, None)
+
+
+@pytest.mark.asyncio
+async def test_authenticate_full_discovery() -> None:
+    """authenticate() without cached IDs returns (discovered, discovered)."""
+    api = ElectricIrelandAPI("user@test.com", "pass123", "951785073")
+    expected_ids = {
+        "partner": "PARTNER1",
+        "contract": "CONTRACT1",
+        "premise": "PREMISE1",
+    }
+    with aioresponses_mock() as m:
+        m.get(
+            f"{BASE_URL}/",
+            status=200,
+            body=_LOGIN_PAGE_HTML,
+            headers={"Set-Cookie": "rvt=rvttoken123; Path=/"},
+        )
+        m.post(f"{BASE_URL}/", status=200, body=_DASHBOARD_HTML)
+        m.post(f"{BASE_URL}/Accounts/OnEvent", status=200, body=_INSIGHTS_HTML)
+        async with aiohttp.ClientSession() as session:
+            result = await api.authenticate(session, meter_ids=None)
+    assert result == (expected_ids, expected_ids)
+
+
+# ---------------------------------------------------------------------------
+# get_bill_periods tests
+# ---------------------------------------------------------------------------
+
+_BILL_PERIOD_RESPONSE = {
+    "subStatusCode": "SUCCESS",
+    "isSuccess": True,
+    "message": "Successfully executed query for query BillPeriod",
+    "data": [
+        {
+            "startDate": "2026-02-26T00:00:00Z",
+            "endDate": "2026-03-25T23:59:59Z",
+            "current": False,
+            "hasAppliance": True,
+        },
+        {
+            "startDate": "2026-03-26T00:00:00Z",
+            "endDate": "2026-04-25T22:59:59Z",
+            "current": True,
+            "hasAppliance": False,
+        },
+    ],
+}
+
+
+@pytest.mark.asyncio
+async def test_get_bill_periods_success() -> None:
+    """Successful bill-period response returns list of BillPeriod dicts."""
+    api = ElectricIrelandAPI("user@test.com", "pass123", "951785073")
+    meter_ids = {"partner": "P1", "contract": "C1", "premise": "PR1"}
+    url = f"{BASE_URL}/MeterInsight/P1/C1/PR1/bill-period"
+    with aioresponses_mock() as m:
+        m.get(url, payload=_BILL_PERIOD_RESPONSE, content_type="application/json")
+        async with aiohttp.ClientSession() as session:
+            result = await api.get_bill_periods(session, meter_ids)
+    assert len(result) == 2
+    assert result[0]["startDate"] == "2026-02-26T00:00:00Z"
+    assert result[1]["current"] is True
+
+
+@pytest.mark.asyncio
+async def test_get_bill_periods_204() -> None:
+    """HTTP 204 from bill-period endpoint returns empty list."""
+    api = ElectricIrelandAPI("user@test.com", "pass123", "951785073")
+    meter_ids = {"partner": "P1", "contract": "C1", "premise": "PR1"}
+    url = f"{BASE_URL}/MeterInsight/P1/C1/PR1/bill-period"
+    with aioresponses_mock() as m:
+        m.get(url, status=204)
+        async with aiohttp.ClientSession() as session:
+            result = await api.get_bill_periods(session, meter_ids)
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_get_bill_periods_session_expired() -> None:
+    """200 + text/html response raises CannotConnect (session expired)."""
+    api = ElectricIrelandAPI("user@test.com", "pass123", "951785073")
+    meter_ids = {"partner": "P1", "contract": "C1", "premise": "PR1"}
+    url = f"{BASE_URL}/MeterInsight/P1/C1/PR1/bill-period"
+    with aioresponses_mock() as m:
+        m.get(
+            url,
+            status=200,
+            body="<html>Login Page</html>",
+            content_type="text/html",
+        )
+        async with aiohttp.ClientSession() as session:
+            with pytest.raises(CannotConnect, match="Session expired"):
+                await api.get_bill_periods(session, meter_ids)
+
+
+@pytest.mark.asyncio
+async def test_get_bill_periods_client_error() -> None:
+    """aiohttp.ClientError raises CannotConnect."""
+    api = ElectricIrelandAPI("user@test.com", "pass123", "951785073")
+    meter_ids = {"partner": "P1", "contract": "C1", "premise": "PR1"}
+    url = f"{BASE_URL}/MeterInsight/P1/C1/PR1/bill-period"
+    with aioresponses_mock() as m:
+        m.get(url, exception=aiohttp.ClientError("network error"))
+        async with aiohttp.ClientSession() as session:
+            with pytest.raises(CannotConnect):
+                await api.get_bill_periods(session, meter_ids)
+
+
+# ---------------------------------------------------------------------------
+# get_hourly_usage tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_hourly_usage_delegates_to_get_data() -> None:
+    """get_hourly_usage delegates to MeterInsightClient.get_data."""
+    api = ElectricIrelandAPI("user@test.com", "pass123", "951785073")
+    meter_ids = {"partner": "P1", "contract": "C1", "premise": "PR1"}
+    url = f"{BASE_URL}/MeterInsight/P1/C1/PR1/hourly-usage?date=2026-03-23"
+    with aioresponses_mock() as m:
+        m.get(url, payload=SAMPLE_RESPONSE, content_type="application/json")
+        async with aiohttp.ClientSession() as session:
+            result = await api.get_hourly_usage(session, meter_ids, date(2026, 3, 23))
+    assert len(result) == 24
+    for dp in result:
+        assert "consumption" in dp
+        assert "cost" in dp
+        assert "intervalEnd" in dp
