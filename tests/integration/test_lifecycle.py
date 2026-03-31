@@ -333,6 +333,7 @@ async def test_coordinator_populates_data_structure(
     assert "import_error" in data
     assert "appliance_count" in data
     assert "bill_periods_available" in data
+    assert "tariff_buckets_seen" in data
     assert data["datapoint_count"] > 0
     assert data["last_import"] is not None
     assert data["latest_data_timestamp"] is not None
@@ -479,5 +480,7 @@ async def test_coordinator_data_structure_has_new_fields(
     data = entry.runtime_data.data
     assert "appliance_count" in data
     assert "bill_periods_available" in data
+    assert "tariff_buckets_seen" in data
     assert isinstance(data["appliance_count"], int)
     assert isinstance(data["bill_periods_available"], int)
+    assert isinstance(data["tariff_buckets_seen"], int)

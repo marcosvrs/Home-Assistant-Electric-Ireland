@@ -29,7 +29,7 @@ STAT_ID_COST = f"{DOMAIN}:{ACCOUNT}_cost"
 TEST_METER_IDS = {"partner": "P1", "contract": "C1", "premise": "PR1"}
 
 
-def make_datapoints(n_days=1, base_ts=1774224000):
+def make_datapoints(n_days=1, base_ts=1774224000, tariff_bucket="off_peak"):
     """Create n_days * 24 hourly datapoints."""
     dps = []
     for day in range(n_days):
@@ -40,6 +40,7 @@ def make_datapoints(n_days=1, base_ts=1774224000):
                     "consumption": round(0.5 + hour * 0.1, 2),
                     "cost": round(0.1 + hour * 0.02, 2),
                     "intervalEnd": ts,
+                    "tariff_bucket": tariff_bucket,
                 }
             )
     return dps
@@ -311,6 +312,7 @@ async def test_interval_start_alignment(recorder_mock, hass, mock_config_entry):
             "consumption": 0.5,
             "cost": 0.1,
             "intervalEnd": 1774227599,
+            "tariff_bucket": "off_peak",
         }
     ]
 
@@ -802,6 +804,7 @@ async def test_empty_data_subsequent_run_no_update(recorder_mock, hass, mock_con
             "import_error": None,
             "appliance_count": 0,
             "bill_periods_available": 0,
+            "tariff_buckets_seen": 0,
         }
         coordinator._has_imported_before = True
 
@@ -945,7 +948,9 @@ async def test_latest_timestamp_none_when_interval_zero(recorder_mock, hass, moc
     """Test latest_data_timestamp is None when all intervalEnd are 0 (falsy max)."""
     mock_config_entry.add_to_hass(hass)
 
-    zero_ts_datapoints = [{"consumption": 0.5, "cost": 0.1, "intervalEnd": 0} for _ in range(3)]
+    zero_ts_datapoints = [
+        {"consumption": 0.5, "cost": 0.1, "intervalEnd": 0, "tariff_bucket": "flat_rate"} for _ in range(3)
+    ]
 
     with (
         patch(
@@ -1119,3 +1124,228 @@ async def test_coverage_check_extends_fetch_for_uncovered_dates(recorder_mock, h
         assert mock_api_instance.get_hourly_usage.call_count == LOOKUP_DAYS
 
         assert coordinator._bill_periods == bill_periods
+
+
+# ===========================================================================
+# PER-TARIFF STATISTICS TESTS
+# ===========================================================================
+
+
+async def test_per_tariff_statistics_created_for_mixed_buckets(recorder_mock, hass, mock_config_entry):
+    """Per-tariff stats are created when datapoints span multiple tariff buckets."""
+    mock_config_entry.add_to_hass(hass)
+
+    off_peak = make_datapoints(1, base_ts=1774224000, tariff_bucket="off_peak")
+    on_peak = make_datapoints(1, base_ts=1774224000 + 86400, tariff_bucket="on_peak")
+    mixed = off_peak + on_peak
+
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
+    ):
+        mock_api_instance = AsyncMock()
+        _setup_api_mock(
+            mock_api_instance,
+            hourly_side_effect=[mixed] + [[] for _ in range(50)],
+        )
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import (
+            ElectricIrelandCoordinator,
+        )
+
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+        result = await coordinator._async_update_data()
+
+    await async_wait_recording_done(hass)
+
+    assert result["tariff_buckets_seen"] == 2
+
+    stat_off = f"{DOMAIN}:{ACCOUNT}_consumption_off_peak"
+    stat_on = f"{DOMAIN}:{ACCOUNT}_consumption_on_peak"
+
+    start = datetime(2026, 3, 23, 0, 0, tzinfo=UTC)
+    end = datetime(2026, 3, 25, 0, 0, tzinfo=UTC)
+
+    for stat_id in (stat_off, stat_on):
+        stats = await get_instance(hass).async_add_executor_job(
+            statistics_during_period,
+            hass,
+            start,
+            end,
+            {stat_id},
+            "hour",
+            None,
+            {"sum", "state"},
+        )
+        assert stat_id in stats
+        assert len(stats[stat_id]) == 24
+
+    off_stats = await get_instance(hass).async_add_executor_job(
+        statistics_during_period,
+        hass,
+        start,
+        end,
+        {stat_off},
+        "hour",
+        None,
+        {"sum"},
+    )
+    off_total = off_stats[stat_off][-1]["sum"]
+    expected_off = sum(dp["consumption"] for dp in off_peak)
+    assert abs(off_total - expected_off) < 0.01
+
+
+async def test_per_tariff_cost_statistics_created(recorder_mock, hass, mock_config_entry):
+    """Per-tariff cost stats are created alongside consumption stats."""
+    mock_config_entry.add_to_hass(hass)
+
+    off_peak = make_datapoints(1, base_ts=1774224000, tariff_bucket="off_peak")
+    on_peak = make_datapoints(1, base_ts=1774224000 + 86400, tariff_bucket="on_peak")
+    mixed = off_peak + on_peak
+
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
+    ):
+        mock_api_instance = AsyncMock()
+        _setup_api_mock(
+            mock_api_instance,
+            hourly_side_effect=[mixed] + [[] for _ in range(50)],
+        )
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import (
+            ElectricIrelandCoordinator,
+        )
+
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+        await coordinator._async_update_data()
+
+    await async_wait_recording_done(hass)
+
+    start = datetime(2026, 3, 23, 0, 0, tzinfo=UTC)
+    end = datetime(2026, 3, 25, 0, 0, tzinfo=UTC)
+
+    cost_off = f"{DOMAIN}:{ACCOUNT}_cost_off_peak"
+    cost_on = f"{DOMAIN}:{ACCOUNT}_cost_on_peak"
+    for stat_id in (cost_off, cost_on):
+        stats = await get_instance(hass).async_add_executor_job(
+            statistics_during_period,
+            hass,
+            start,
+            end,
+            {stat_id},
+            "hour",
+            None,
+            {"sum"},
+        )
+        assert stat_id in stats
+        assert len(stats[stat_id]) == 24
+
+
+async def test_flat_rate_only_skips_per_tariff_stats(recorder_mock, hass, mock_config_entry):
+    """When all datapoints are flat_rate, per-tariff stats are not created (redundant with aggregate)."""
+    mock_config_entry.add_to_hass(hass)
+
+    flat = make_datapoints(1, tariff_bucket="flat_rate")
+
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
+    ):
+        mock_api_instance = AsyncMock()
+        _setup_api_mock(
+            mock_api_instance,
+            hourly_side_effect=[flat] + [[] for _ in range(50)],
+        )
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import (
+            ElectricIrelandCoordinator,
+        )
+
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+        result = await coordinator._async_update_data()
+
+    await async_wait_recording_done(hass)
+
+    assert result["tariff_buckets_seen"] == 1
+
+    start = datetime(2026, 3, 23, 0, 0, tzinfo=UTC)
+    end = datetime(2026, 3, 24, 0, 0, tzinfo=UTC)
+
+    stat_flat = f"{DOMAIN}:{ACCOUNT}_consumption_flat_rate"
+    stats = await get_instance(hass).async_add_executor_job(
+        statistics_during_period,
+        hass,
+        start,
+        end,
+        {stat_flat},
+        "hour",
+        None,
+        {"sum"},
+    )
+    assert stat_flat not in stats or len(stats[stat_flat]) == 0
+
+
+async def test_single_non_flat_bucket_creates_per_tariff_stats(recorder_mock, hass, mock_config_entry):
+    """When all datapoints are off_peak (not flat_rate), per-tariff stats are still created."""
+    mock_config_entry.add_to_hass(hass)
+
+    off_peak_only = make_datapoints(1, tariff_bucket="off_peak")
+
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
+    ):
+        mock_api_instance = AsyncMock()
+        _setup_api_mock(
+            mock_api_instance,
+            hourly_side_effect=[off_peak_only] + [[] for _ in range(50)],
+        )
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import (
+            ElectricIrelandCoordinator,
+        )
+
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+        result = await coordinator._async_update_data()
+
+    await async_wait_recording_done(hass)
+
+    assert result["tariff_buckets_seen"] == 1
+
+    start = datetime(2026, 3, 23, 0, 0, tzinfo=UTC)
+    end = datetime(2026, 3, 24, 0, 0, tzinfo=UTC)
+
+    stat_off = f"{DOMAIN}:{ACCOUNT}_consumption_off_peak"
+    stats = await get_instance(hass).async_add_executor_job(
+        statistics_during_period,
+        hass,
+        start,
+        end,
+        {stat_off},
+        "hour",
+        None,
+        {"sum"},
+    )
+    assert stat_off in stats
+    assert len(stats[stat_off]) == 24

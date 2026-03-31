@@ -122,9 +122,11 @@ async def test_meter_insight_client_parses_response() -> None:
         assert "consumption" in dp
         assert "cost" in dp
         assert "intervalEnd" in dp
+        assert "tariff_bucket" in dp
         assert isinstance(dp["intervalEnd"], int)
         assert isinstance(dp["consumption"], float)
         assert isinstance(dp["cost"], float)
+        assert isinstance(dp["tariff_bucket"], str)
 
 
 # ---------------------------------------------------------------------------
@@ -668,3 +670,5 @@ async def test_get_hourly_usage_delegates_to_get_data() -> None:
         assert "consumption" in dp
         assert "cost" in dp
         assert "intervalEnd" in dp
+        assert "tariff_bucket" in dp
+        assert dp["tariff_bucket"] == "off_peak"

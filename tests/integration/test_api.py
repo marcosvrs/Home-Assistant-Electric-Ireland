@@ -17,6 +17,7 @@ from custom_components.electric_ireland_insights.api import (
     ElectricIrelandAPI,
     MeterInsightClient,
 )
+from custom_components.electric_ireland_insights.const import TARIFF_BUCKET_MAP
 from custom_components.electric_ireland_insights.exceptions import (
     AccountNotFound,
     CachedIdsInvalid,
@@ -175,6 +176,7 @@ async def test_get_data_parses_tariff(session: aiohttp.ClientSession, tariff: st
     assert len(result) == 1
     assert result[0]["consumption"] == 0.5
     assert result[0]["cost"] == 0.10
+    assert result[0]["tariff_bucket"] == TARIFF_BUCKET_MAP[tariff]
 
 
 async def test_get_data_no_tariff_returns_empty(session: aiohttp.ClientSession) -> None:

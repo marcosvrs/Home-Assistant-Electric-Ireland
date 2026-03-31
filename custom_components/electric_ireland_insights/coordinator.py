@@ -34,6 +34,13 @@ from .types import (
 
 _LOGGER = logging.getLogger(__name__)
 
+TARIFF_BUCKET_MAP_DISPLAY: dict[str, str] = {
+    "flat_rate": "Flat Rate",
+    "off_peak": "Off-Peak",
+    "mid_peak": "Mid-Peak",
+    "on_peak": "On-Peak",
+}
+
 
 class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # type: ignore[misc]
     """Coordinator to fetch EI data and import external statistics."""
@@ -191,6 +198,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
                             "import_error": "No new data available",
                             "appliance_count": 0,
                             "bill_periods_available": 0,
+                            "tariff_buckets_seen": 0,
                         }
                     )
                 return _mark_success(
@@ -201,6 +209,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
                         "import_error": None,
                         "appliance_count": 0,
                         "bill_periods_available": 0,
+                        "tariff_buckets_seen": 0,
                     }
                 )
 
@@ -219,6 +228,29 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
                 "EUR",
             )
 
+            buckets: dict[str, list[ElectricIrelandDatapoint]] = {}
+            for dp in datapoints:
+                buckets.setdefault(dp["tariff_bucket"], []).append(dp)
+
+            seen_buckets = set(buckets.keys())
+            if len(seen_buckets) > 1 or (len(seen_buckets) == 1 and "flat_rate" not in seen_buckets):
+                for bucket_name, bucket_dps in buckets.items():
+                    display = TARIFF_BUCKET_MAP_DISPLAY.get(bucket_name, bucket_name.replace("_", " ").title())
+                    await self._insert_statistics(
+                        bucket_dps,
+                        "consumption",
+                        f"{DOMAIN}:{self._account}_consumption_{bucket_name}",
+                        UnitOfEnergy.KILO_WATT_HOUR,
+                        name_override=f"Electric Ireland Consumption {display} ({self._account})",
+                    )
+                    await self._insert_statistics(
+                        bucket_dps,
+                        "cost",
+                        f"{DOMAIN}:{self._account}_cost_{bucket_name}",
+                        "EUR",
+                        name_override=f"Electric Ireland Cost {display} ({self._account})",
+                    )
+
             last_ts = max((dp["intervalEnd"] for dp in datapoints), default=None)
             return _mark_success(
                 {
@@ -228,6 +260,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
                     "import_error": None,
                     "appliance_count": 0,
                     "bill_periods_available": len(self._bill_periods),
+                    "tariff_buckets_seen": len(seen_buckets),
                 }
             )
 
@@ -256,6 +289,8 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
         metric: Literal["consumption", "cost"],
         statistic_id: str,
         unit: str,
+        *,
+        name_override: str | None = None,
     ) -> None:
         filtered = []
         for dp in datapoints:
@@ -312,10 +347,11 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
         # and remove `has_mean=False`.  `has_mean` is deprecated since HA 2025.8 and will be
         # removed in HA 2026.11.  As of 2026-03-31 the latest pytest-homeassistant-custom-component
         # (0.13.205) still bundles homeassistant==2025.1.4, so the new API is not yet available.
+        default_name = f"Electric Ireland {'Consumption' if metric == 'consumption' else 'Cost'} ({self._account})"
         metadata = StatisticMetaData(
             has_mean=False,
             has_sum=True,
-            name=f"Electric Ireland {'Consumption' if metric == 'consumption' else 'Cost'} ({self._account})",
+            name=name_override or default_name,
             source=DOMAIN,
             statistic_id=statistic_id,
             unit_of_measurement=unit,

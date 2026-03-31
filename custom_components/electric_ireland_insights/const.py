@@ -10,3 +10,12 @@ NAME = "Electric Ireland Insights"
 LOOKUP_DAYS = 7
 INITIAL_LOOKBACK_DAYS = 30
 SCAN_INTERVAL = timedelta(hours=1)
+
+# Maps API tariff bucket keys to stable snake_case identifiers used in
+# statistic IDs (e.g. ``electric_ireland_insights:{acct}_consumption_off_peak``).
+TARIFF_BUCKET_MAP: dict[str, str] = {
+    "flatRate": "flat_rate",
+    "offPeak": "off_peak",
+    "midPeak": "mid_peak",
+    "onPeak": "on_peak",
+}

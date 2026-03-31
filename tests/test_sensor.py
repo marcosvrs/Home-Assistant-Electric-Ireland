@@ -37,6 +37,7 @@ async def test_last_import_time_value(hass, enable_custom_integrations, mock_con
         "import_error": None,
         "appliance_count": 0,
         "bill_periods_available": 0,
+        "tariff_buckets_seen": 0,
     }
     mock_coordinator.hass = hass
     mock_coordinator.config_entry = mock_config_entry
@@ -56,6 +57,7 @@ async def test_data_freshness_returns_none_when_no_timestamp(hass, enable_custom
         "import_error": None,
         "appliance_count": 0,
         "bill_periods_available": 0,
+        "tariff_buckets_seen": 0,
     }
     mock_coordinator.hass = hass
     mock_coordinator.config_entry = mock_config_entry
@@ -86,6 +88,7 @@ async def test_unique_id_format(hass, enable_custom_integrations, mock_config_en
         "import_error": None,
         "appliance_count": 0,
         "bill_periods_available": 0,
+        "tariff_buckets_seen": 0,
     }
     mock_coordinator.hass = hass
     mock_coordinator.config_entry = mock_config_entry
@@ -104,6 +107,7 @@ async def test_device_info_has_account(hass, enable_custom_integrations, mock_co
         "import_error": None,
         "appliance_count": 0,
         "bill_periods_available": 0,
+        "tariff_buckets_seen": 0,
     }
     mock_coordinator.hass = hass
     mock_coordinator.config_entry = mock_config_entry
@@ -122,6 +126,7 @@ async def test_has_entity_name_is_true(hass, enable_custom_integrations, mock_co
         "import_error": None,
         "appliance_count": 0,
         "bill_periods_available": 0,
+        "tariff_buckets_seen": 0,
     }
     mock_coordinator.hass = hass
     mock_coordinator.config_entry = mock_config_entry
@@ -143,6 +148,7 @@ async def test_data_freshness_with_valid_timestamp(hass, enable_custom_integrati
         "import_error": None,
         "appliance_count": 0,
         "bill_periods_available": 0,
+        "tariff_buckets_seen": 0,
     }
     mock_coordinator.hass = hass
     mock_coordinator.config_entry = mock_config_entry

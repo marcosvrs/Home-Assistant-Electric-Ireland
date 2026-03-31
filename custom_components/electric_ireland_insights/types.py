@@ -12,6 +12,7 @@ class ElectricIrelandDatapoint(TypedDict):
     consumption: float
     cost: float
     intervalEnd: int
+    tariff_bucket: str
 
 
 class CoordinatorData(TypedDict):
@@ -23,6 +24,7 @@ class CoordinatorData(TypedDict):
     import_error: str | None
     appliance_count: int
     bill_periods_available: int
+    tariff_buckets_seen: int
 
 
 class MeterIds(TypedDict):

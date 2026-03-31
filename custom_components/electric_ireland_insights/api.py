@@ -6,7 +6,7 @@ from datetime import UTC, date, datetime, time
 import aiohttp
 from bs4 import BeautifulSoup, Tag
 
-from .const import DOMAIN
+from .const import DOMAIN, TARIFF_BUCKET_MAP
 from .exceptions import AccountNotFound, CachedIdsInvalid, CannotConnect, InvalidAuth
 from .types import BillPeriod, ElectricIrelandDatapoint, MeterIds
 
@@ -385,17 +385,19 @@ class MeterInsightClient:
                 LOGGER.warning("Failed to parse date %s: %s", end_date_str, err)
                 continue
 
-            usage_entry = next(
-                (dp[key] for key in usage_tariff_keys if dp.get(key) is not None),
+            active_key = next(
+                (key for key in usage_tariff_keys if dp.get(key) is not None),
                 None,
             )
 
-            if usage_entry is not None:
+            if active_key is not None:
+                usage_entry = dp[active_key]
                 datapoints.append(
                     {
                         "consumption": usage_entry.get("consumption"),
                         "cost": usage_entry.get("cost"),
                         "intervalEnd": interval_end,
+                        "tariff_bucket": TARIFF_BUCKET_MAP.get(active_key, active_key),
                     }
                 )
 
