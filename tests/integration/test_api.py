@@ -35,10 +35,8 @@ from .conftest import (
     PARTNER,
     PREMISE,
     acct_div,
-    hourly_callback,
     hourly_json,
     insights_page,
-    mock_ei_http,
     page,
 )
 
@@ -160,19 +158,6 @@ async def test_validate_credentials_returns_meter_ids(session: aiohttp.ClientSes
     assert ids == _IDS
 
 
-async def test_fetch_day_range_collects_days(session: aiohttp.ClientSession) -> None:
-    db = page(acct_div(ACCOUNT_1))
-    with aioresponses() as m:
-        mock_ei_http(m, db, hourly_cb=hourly_callback)
-
-        api = ElectricIrelandAPI("u@test.com", "p", ACCOUNT_1)
-        datapoints, discovered_ids = await api.fetch_day_range(session, lookback_days=3)
-
-    assert len(datapoints) == 3
-    assert discovered_ids is not None
-    assert discovered_ids["partner"] == PARTNER
-
-
 # ===================================================================
 # MeterInsightClient.get_data — tariff parsing
 # ===================================================================
@@ -271,34 +256,3 @@ async def test_validate_credentials_rvt_from_hidden_input(session: aiohttp.Clien
         result = await api.validate_credentials(session)
 
     assert result["partner"] == PARTNER
-
-
-async def test_fetch_day_range_clears_cookies_on_cached_fallback(
-    session: aiohttp.ClientSession,
-) -> None:
-    """When _login_cached fails, cookie jar is cleared before _login fallback."""
-    db = page(acct_div(ACCOUNT_1))
-    with aioresponses() as m:
-        # _login_cached: GET login → POST login → OnEvent returns non-insights
-        m.get(f"{BASE_URL}/", body=LOGIN_PAGE, headers={"Set-Cookie": "rvt=tok1"})
-        m.post(f"{BASE_URL}/", body=db)
-        m.post(f"{BASE_URL}/Accounts/OnEvent", body="<html>not insights</html>")
-        # _login fallback (after cookie jar clear): GET login → POST login → OnEvent
-        m.get(f"{BASE_URL}/", body=LOGIN_PAGE, headers={"Set-Cookie": "rvt=tok2"})
-        m.post(f"{BASE_URL}/", body=db)
-        m.post(
-            f"{BASE_URL}/Accounts/OnEvent",
-            body=insights_page(PARTNER, CONTRACT, PREMISE),
-        )
-        m.get(_HOURLY_RE, callback=hourly_callback, repeat=True)
-
-        api = ElectricIrelandAPI("u@test.com", "pass", ACCOUNT_1)
-        result, discovered_ids = await api.fetch_day_range(
-            session,
-            lookback_days=1,
-            meter_ids=_IDS,
-        )
-
-    assert len(result) > 0
-    assert discovered_ids is not None
-    assert discovered_ids["partner"] == PARTNER

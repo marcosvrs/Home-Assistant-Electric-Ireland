@@ -63,7 +63,9 @@ def mock_config_entry():
 def mock_api():
     api_mock = AsyncMock()
     api_instance = AsyncMock()
-    api_instance.fetch_day_range = AsyncMock(return_value=(SAMPLE_DATAPOINTS, None))
+    api_instance.authenticate = AsyncMock(return_value=({"partner": "p1", "contract": "c1", "premise": "pr1"}, None))
+    api_instance.get_bill_periods = AsyncMock(return_value=[])
+    api_instance.get_hourly_usage = AsyncMock(return_value=[])
     api_instance.validate_credentials = AsyncMock(return_value={"partner": "p1", "contract": "c1", "premise": "pr1"})
     api_mock.return_value = api_instance
 

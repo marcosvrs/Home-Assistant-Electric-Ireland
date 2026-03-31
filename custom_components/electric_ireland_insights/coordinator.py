@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime, timedelta
-from typing import Literal
+from datetime import UTC, date, datetime, timedelta
+from functools import partial
+from typing import Any, Literal
 
 import aiohttp
-from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
 from homeassistant.components.recorder.statistics import (
     async_add_external_statistics,
@@ -24,13 +24,18 @@ from homeassistant.util.dt import utcnow
 
 from .api import ElectricIrelandAPI
 from .const import DOMAIN, INITIAL_LOOKBACK_DAYS, LOOKUP_DAYS, SCAN_INTERVAL
-from .exceptions import CannotConnect, InvalidAuth
-from .types import CoordinatorData, ElectricIrelandDatapoint, MeterIds
+from .exceptions import CachedIdsInvalid, CannotConnect, InvalidAuth
+from .types import (
+    BillPeriod,
+    CoordinatorData,
+    ElectricIrelandDatapoint,
+    MeterIds,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # type: ignore[misc]  # DataUpdateCoordinator generic: HA typing incomplete
+class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):
     """Coordinator to fetch EI data and import external statistics."""
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:
@@ -41,7 +46,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
             update_interval=SCAN_INTERVAL,
             always_update=True,
         )
-        self.config_entry = config_entry
+        self._config_entry: ConfigEntry[Any] = config_entry
         self._account = config_entry.data["account_number"]
         self._api = ElectricIrelandAPI(
             config_entry.data["username"],
@@ -50,6 +55,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
         )
         self._last_update_success = True
         self._has_imported_before = False
+        self._bill_periods: list[BillPeriod] = []
         self._session = async_create_clientsession(hass, cookie_jar=aiohttp.CookieJar())
 
     async def _async_update_data(self) -> CoordinatorData:
@@ -64,20 +70,16 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
 
         try:
             stat_id = f"{DOMAIN}:{self._account}_consumption"
+            statistic_types: set[Literal["last_reset", "max", "mean", "min", "state", "sum"]] = {"sum"}
             existing = await self.hass.async_add_executor_job(
-                get_last_statistics,
-                self.hass,
-                1,
-                stat_id,
-                True,
-                {"sum"},
+                partial(get_last_statistics, self.hass, 1, stat_id, True, statistic_types)
             )
             lookback = LOOKUP_DAYS if existing else INITIAL_LOOKBACK_DAYS
 
             if not self._has_imported_before:
                 self._has_imported_before = bool(existing)
 
-            entry_data = self.config_entry.data
+            entry_data = self._config_entry.data
             cached_ids: MeterIds | None = None
             if entry_data.get("partner_id") and entry_data.get("contract_id") and entry_data.get("premise_id"):
                 cached_ids = {
@@ -86,22 +88,96 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
                     "premise": entry_data["premise_id"],
                 }
 
-            datapoints, new_meter_ids = await self._api.fetch_day_range(
-                session, lookback_days=lookback, meter_ids=cached_ids
-            )
+            try:
+                meter_ids, discovered_ids = await self._api.authenticate(session, cached_ids)
+            except CannotConnect:
+                if cached_ids is None:
+                    raise
+                _LOGGER.warning("Cached meter IDs failed during login, falling back to full discovery")
+                session.cookie_jar.clear()
+                meter_ids, discovered_ids = await self._api.authenticate(session, None)
 
-            if new_meter_ids is not None:
+            if discovered_ids is not None:
                 new_data = {
-                    **dict(self.config_entry.data),
-                    "partner_id": new_meter_ids["partner"],
-                    "contract_id": new_meter_ids["contract"],
-                    "premise_id": new_meter_ids["premise"],
+                    **dict(self._config_entry.data),
+                    "partner_id": discovered_ids["partner"],
+                    "contract_id": discovered_ids["contract"],
+                    "premise_id": discovered_ids["premise"],
                 }
-                self.hass.config_entries.async_update_entry(self.config_entry, data=new_data)
+                self.hass.config_entries.async_update_entry(self._config_entry, data=new_data)
                 _LOGGER.debug(
                     "Updated cached meter IDs: partner=%s",
-                    new_meter_ids["partner"],
+                    discovered_ids["partner"],
                 )
+
+            try:
+                self._bill_periods = await self._api.get_bill_periods(session, meter_ids)
+            except CannotConnect:
+                _LOGGER.warning("Failed to fetch bill periods, falling back to full lookback window")
+                self._bill_periods = []
+
+            yesterday = (datetime.now(UTC) - timedelta(days=1)).date()
+            all_lookback_dates = {yesterday - timedelta(days=i) for i in range(lookback)}
+
+            if self._bill_periods:
+                dates_in_periods: set[date] = set()
+                for period in self._bill_periods:
+                    period_start = date.fromisoformat(period["startDate"][:10])
+                    period_end = date.fromisoformat(period["endDate"][:10])
+                    d = period_start
+                    while d <= period_end:
+                        dates_in_periods.add(d)
+                        d += timedelta(days=1)
+
+                dates_to_fetch = dates_in_periods & all_lookback_dates
+
+                if len(dates_to_fetch) < len(all_lookback_dates):
+                    uncovered = all_lookback_dates - dates_to_fetch
+                    dates_to_fetch |= uncovered
+                    _LOGGER.debug(
+                        "Billing periods cover %d of %d days; adding %d uncovered",
+                        len(dates_to_fetch) - len(uncovered),
+                        len(all_lookback_dates),
+                        len(uncovered),
+                    )
+            else:
+                dates_to_fetch = all_lookback_dates
+
+            datapoints: list[ElectricIrelandDatapoint] = []
+            for target_date in sorted(dates_to_fetch):  # SEQUENTIAL — never parallel
+                try:
+                    day_data = await self._api.get_hourly_usage(
+                        session,
+                        meter_ids,
+                        target_date,
+                    )
+                    datapoints.extend(day_data)
+                except CachedIdsInvalid:
+                    _LOGGER.warning(
+                        "Cached meter IDs failed during data fetch, re-authenticating",
+                    )
+                    session.cookie_jar.clear()
+                    meter_ids, discovered_ids = await self._api.authenticate(
+                        session,
+                        None,
+                    )
+                    if discovered_ids is not None:
+                        new_data = {
+                            **dict(self._config_entry.data),
+                            "partner_id": discovered_ids["partner"],
+                            "contract_id": discovered_ids["contract"],
+                            "premise_id": discovered_ids["premise"],
+                        }
+                        self.hass.config_entries.async_update_entry(
+                            self._config_entry,
+                            data=new_data,
+                        )
+                    day_data = await self._api.get_hourly_usage(
+                        session,
+                        meter_ids,
+                        target_date,
+                    )
+                    datapoints.extend(day_data)
 
             if not datapoints:
                 if self._has_imported_before:
@@ -113,6 +189,8 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
                             "datapoint_count": 0,
                             "latest_data_timestamp": None,
                             "import_error": "No new data available",
+                            "appliance_count": 0,
+                            "bill_periods_available": 0,
                         }
                     )
                 return _mark_success(
@@ -121,6 +199,8 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
                         "datapoint_count": 0,
                         "latest_data_timestamp": None,
                         "import_error": None,
+                        "appliance_count": 0,
+                        "bill_periods_available": 0,
                     }
                 )
 
@@ -146,6 +226,8 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
                     "datapoint_count": len(datapoints),
                     "latest_data_timestamp": (datetime.fromtimestamp(last_ts, tz=UTC) if last_ts else None),
                     "import_error": None,
+                    "appliance_count": 0,
+                    "bill_periods_available": len(self._bill_periods),
                 }
             )
 
@@ -190,15 +272,18 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
         filtered.sort(key=lambda x: x[0])
         overlap_start = filtered[0][0]
 
-        existing_before = await get_instance(self.hass).async_add_executor_job(
-            statistics_during_period,
-            self.hass,
-            overlap_start - timedelta(hours=1),
-            overlap_start,
-            {statistic_id},
-            "hour",
-            None,
-            {"sum"},
+        statistic_types: set[Literal["change", "last_reset", "max", "mean", "min", "state", "sum"]] = {"sum"}
+        existing_before = await self.hass.async_add_executor_job(
+            partial(
+                statistics_during_period,
+                self.hass,
+                overlap_start - timedelta(hours=1),
+                overlap_start,
+                {statistic_id},
+                "hour",
+                None,
+                statistic_types,
+            )
         )
 
         base_sum = 0.0
@@ -219,6 +304,14 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
                 )
             )
 
+        # TODO(has_mean): When dev deps upgrade to HA ≥2025.8 (pytest-homeassistant-custom-component
+        # ships a version bundling homeassistant>=2025.8), replace the deprecated `has_mean` with:
+        #   from homeassistant.components.recorder.models import StatisticMeanType
+        #   mean_type=StatisticMeanType.NONE,
+        #   unit_class="energy" (consumption) / unit_class=None (cost),
+        # and remove `has_mean=False`.  `has_mean` is deprecated since HA 2025.8 and will be
+        # removed in HA 2026.11.  As of 2026-03-31 the latest pytest-homeassistant-custom-component
+        # (0.13.205) still bundles homeassistant==2025.1.4, so the new API is not yet available.
         metadata = StatisticMetaData(
             has_mean=False,
             has_sum=True,

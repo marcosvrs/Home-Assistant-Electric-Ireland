@@ -6,12 +6,17 @@ Real: async_setup_entry, coordinator, recorder statistics, sensor platform.
 
 from __future__ import annotations
 
+import re
+from datetime import UTC, datetime, timedelta
+
+import aiohttp
 from aioresponses import aioresponses
+from homeassistant.components.recorder import get_instance
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.electric_ireland_insights.const import DOMAIN
+from custom_components.electric_ireland_insights.const import DOMAIN, INITIAL_LOOKBACK_DAYS, LOOKUP_DAYS
 
 from .conftest import (
     ACCOUNT_1,
@@ -326,6 +331,8 @@ async def test_coordinator_populates_data_structure(
     assert "datapoint_count" in data
     assert "latest_data_timestamp" in data
     assert "import_error" in data
+    assert "appliance_count" in data
+    assert "bill_periods_available" in data
     assert data["datapoint_count"] > 0
     assert data["last_import"] is not None
     assert data["latest_data_timestamp"] is not None
@@ -366,3 +373,111 @@ async def test_v1_to_v2_migration(
     assert entry.state == ConfigEntryState.LOADED
     # Coordinator discovered IDs during setup
     assert entry.data["partner_id"] == PARTNER
+
+
+# ===================================================================
+# Pre-flight and appliance statistics
+# ===================================================================
+
+
+async def test_preflight_failure_falls_back_to_blind_fetch(
+    recorder_mock,
+    hass: HomeAssistant,
+    enable_custom_integrations,
+) -> None:
+    entry = _entry()
+    entry.add_to_hass(hass)
+    db = page(acct_div(ACCOUNT_1))
+
+    call_count = 0
+
+    def counting_hourly_cb(url, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        return hourly_callback(url, **kwargs)
+
+    with aioresponses() as m:
+        mock_ei_http(m, db, hourly_cb=counting_hourly_cb, include_bill_period=False)
+        bill_re = re.compile(rf"{re.escape(BASE_URL)}/MeterInsight/{PARTNER}/{CONTRACT}/{PREMISE}/bill-period")
+        m.get(bill_re, exception=aiohttp.ClientError("simulated failure"), repeat=True)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert entry.state == ConfigEntryState.LOADED
+    assert call_count == INITIAL_LOOKBACK_DAYS
+
+
+async def test_preflight_bounds_hourly_fetches(
+    recorder_mock,
+    hass: HomeAssistant,
+    enable_custom_integrations,
+) -> None:
+    entry = _entry()
+    entry.add_to_hass(hass)
+    db = page(acct_div(ACCOUNT_1))
+
+    yesterday = (datetime.now(UTC) - timedelta(days=1)).date()
+    period_start = yesterday - timedelta(days=4)
+    period_end = yesterday
+
+    bp_response: dict = {
+        "isSuccess": True,
+        "data": [
+            {
+                "startDate": f"{period_start.isoformat()}T00:00:00Z",
+                "endDate": f"{period_end.isoformat()}T23:59:59Z",
+                "current": False,
+                "hasAppliance": False,
+            }
+        ],
+    }
+
+    hourly_calls: list[str] = []
+
+    def tracking_callback(url, **kwargs):
+        hourly_calls.append(str(url))
+        return hourly_callback(url, **kwargs)
+
+    with aioresponses() as m:
+        mock_ei_http(m, db, hourly_cb=tracking_callback, bill_period_response=bp_response)
+
+        # First refresh: lookback=INITIAL_LOOKBACK_DAYS (no existing stats)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        assert entry.state == ConfigEntryState.LOADED
+        assert len(hourly_calls) == INITIAL_LOOKBACK_DAYS
+
+        # Wait for recorder to persist stats from first refresh
+        await get_instance(hass).async_block_till_done()
+        await hass.async_block_till_done()
+
+        hourly_calls.clear()
+
+        # Second refresh: existing stats -> lookback=LOOKUP_DAYS (7)
+        await entry.runtime_data.async_refresh()
+        await hass.async_block_till_done()
+
+    # 5 period days + 2 uncovered = 7 total (full LOOKUP_DAYS window)
+    assert len(hourly_calls) == LOOKUP_DAYS
+
+
+async def test_coordinator_data_structure_has_new_fields(
+    recorder_mock,
+    hass: HomeAssistant,
+    enable_custom_integrations,
+) -> None:
+    entry = _entry()
+    entry.add_to_hass(hass)
+    db = page(acct_div(ACCOUNT_1))
+
+    with aioresponses() as m:
+        mock_ei_http(m, db, hourly_cb=hourly_callback)
+        await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+    data = entry.runtime_data.data
+    assert "appliance_count" in data
+    assert "bill_periods_available" in data
+    assert isinstance(data["appliance_count"], int)
+    assert isinstance(data["bill_periods_available"], int)

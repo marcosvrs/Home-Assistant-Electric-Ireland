@@ -120,6 +120,8 @@ def mock_ei_http(
     partner: str = PARTNER,
     contract: str = CONTRACT,
     premise: str = PREMISE,
+    include_bill_period: bool = True,
+    bill_period_response: dict | None = None,
 ) -> None:
     """Register every Electric Ireland endpoint inside an ``aioresponses`` block.
 
@@ -127,6 +129,7 @@ def mock_ei_http(
     * POST /              → dashboard   (account list)
     * POST /Accounts/OnEvent → insights page
     * GET  /MeterInsight/…/hourly-usage → JSON data  (optional)
+    * GET  /MeterInsight/…/bill-period → JSON data  (optional)
     """
     m.get(f"{BASE_URL}/", body=LOGIN_PAGE, repeat=True, headers={"Set-Cookie": "rvt=tok1"})
     m.post(f"{BASE_URL}/", body=dashboard_html, repeat=True)
@@ -137,3 +140,8 @@ def mock_ei_http(
         m.get(url_re, callback=hourly_cb, repeat=True)
     elif hourly is not None:
         m.get(url_re, payload=hourly, repeat=True, content_type="application/json")
+
+    if include_bill_period:
+        bill_re = re.compile(rf"{re.escape(BASE_URL)}/MeterInsight/{partner}/{contract}/{premise}/bill-period")
+        bp_payload = bill_period_response if bill_period_response is not None else {"isSuccess": True, "data": []}
+        m.get(bill_re, payload=bp_payload, repeat=True, content_type="application/json")

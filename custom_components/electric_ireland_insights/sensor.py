@@ -27,8 +27,8 @@ PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
-class ElectricIrelandSensorDescription(SensorEntityDescription):  # type: ignore[misc]  # SensorEntityDescription subclass: HA dataclass typing incomplete
-    value_fn: Callable[[CoordinatorData], datetime | float | None]
+class ElectricIrelandSensorDescription(SensorEntityDescription):
+    value_fn: Callable[[CoordinatorData], datetime | float | int | None]
 
 
 DIAGNOSTIC_SENSORS: tuple[ElectricIrelandSensorDescription, ...] = (
@@ -70,7 +70,7 @@ async def async_setup_entry(
     )
 
 
-class ElectricIrelandDiagnosticSensor(CoordinatorEntity[ElectricIrelandCoordinator], SensorEntity):  # type: ignore[misc]  # CoordinatorEntity+SensorEntity multiple inheritance: HA typing incomplete
+class ElectricIrelandDiagnosticSensor(CoordinatorEntity[ElectricIrelandCoordinator], SensorEntity):
     _attr_has_entity_name = True
 
     def __init__(
@@ -80,7 +80,7 @@ class ElectricIrelandDiagnosticSensor(CoordinatorEntity[ElectricIrelandCoordinat
         account_number: str,
     ) -> None:
         super().__init__(coordinator)
-        self.entity_description = description
+        self._description = description
         self._attr_unique_id = f"{DOMAIN}_{account_number}_{description.key}"
         self._attr_entity_registry_enabled_default = False
         self._attr_device_info = DeviceInfo(
@@ -92,7 +92,7 @@ class ElectricIrelandDiagnosticSensor(CoordinatorEntity[ElectricIrelandCoordinat
         )
 
     @property
-    def native_value(self) -> datetime | float | None:
+    def native_value(self) -> datetime | float | int | None:
         if self.coordinator.data is None:
             return None
-        return self.entity_description.value_fn(self.coordinator.data)
+        return self._description.value_fn(self.coordinator.data)

@@ -6,6 +6,8 @@ from homeassistant.config_entries import ConfigEntryState
 
 from custom_components.electric_ireland_insights.const import DOMAIN
 
+TEST_METER_IDS = {"partner": "P1", "contract": "C1", "premise": "PR1"}
+
 
 async def test_setup_entry_success(recorder_mock, hass, enable_custom_integrations, mock_config_entry):
     mock_config_entry.add_to_hass(hass)
@@ -18,7 +20,9 @@ async def test_setup_entry_success(recorder_mock, hass, enable_custom_integratio
         ),
     ):
         mock_api_instance = AsyncMock()
-        mock_api_instance.fetch_day_range = AsyncMock(return_value=([], None))
+        mock_api_instance.authenticate = AsyncMock(return_value=(TEST_METER_IDS, TEST_METER_IDS))
+        mock_api_instance.get_bill_periods = AsyncMock(return_value=[])
+        mock_api_instance.get_hourly_usage = AsyncMock(return_value=[])
         mock_api_class.return_value = mock_api_instance
 
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
@@ -40,7 +44,7 @@ async def test_setup_entry_config_entry_not_ready(recorder_mock, hass, enable_cu
         from custom_components.electric_ireland_insights.exceptions import CannotConnect
 
         mock_api_instance = AsyncMock()
-        mock_api_instance.fetch_day_range = AsyncMock(side_effect=CannotConnect("timeout"))
+        mock_api_instance.authenticate = AsyncMock(side_effect=CannotConnect("timeout"))
         mock_api_class.return_value = mock_api_instance
 
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
@@ -60,7 +64,9 @@ async def test_unload_entry(recorder_mock, hass, enable_custom_integrations, moc
         ),
     ):
         mock_api_instance = AsyncMock()
-        mock_api_instance.fetch_day_range = AsyncMock(return_value=([], None))
+        mock_api_instance.authenticate = AsyncMock(return_value=(TEST_METER_IDS, TEST_METER_IDS))
+        mock_api_instance.get_bill_periods = AsyncMock(return_value=[])
+        mock_api_instance.get_hourly_usage = AsyncMock(return_value=[])
         mock_api_class.return_value = mock_api_instance
 
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
@@ -99,7 +105,9 @@ async def test_migrate_v1_to_v2(recorder_mock, hass, enable_custom_integrations)
         ),
     ):
         mock_api_instance = AsyncMock()
-        mock_api_instance.fetch_day_range = AsyncMock(return_value=([], None))
+        mock_api_instance.authenticate = AsyncMock(return_value=(TEST_METER_IDS, TEST_METER_IDS))
+        mock_api_instance.get_bill_periods = AsyncMock(return_value=[])
+        mock_api_instance.get_hourly_usage = AsyncMock(return_value=[])
         mock_api_class.return_value = mock_api_instance
 
         await hass.config_entries.async_setup(v1_entry.entry_id)
@@ -108,4 +116,3 @@ async def test_migrate_v1_to_v2(recorder_mock, hass, enable_custom_integrations)
     entry = hass.config_entries.async_get_entry(v1_entry.entry_id)
     assert entry.version == 2, f"Entry should be migrated to V2, got {entry.version}"
     assert "partner_id" in entry.data
-    assert entry.data["partner_id"] is None
