@@ -6,8 +6,8 @@ Home Assistant integration with **Electric Ireland insights**.
 
 It is capable of:
 
-* Reporting **consumed energy** in kWh.
-* Reporting **usage cost** in EUR (see the FAQ below for more details on this).
+* Reporting **consumed energy** in kWh (hourly resolution).
+* Reporting **usage cost** in EUR (hourly resolution; see the FAQ below for more details on this).
 
 It will also aggregate the report data into statistical buckets, so they can be fed into the Energy Dashboard. Data
 is imported as external statistics directly into the recorder — no sensor entities are needed for energy or cost data.
@@ -37,25 +37,24 @@ tariff does not offer the 30% Off Direct Debit, this integration will apply a tr
 
 So, in summary: Cost reports gross usage cost with VAT, without discount but also without standing charge or levy.
 
-### Why does the individual reported device sometimes exceed the reported usage in Electric Ireland?
-
-I don't have a clear answer to this. I have noticed this in some buckets, but there it is an issue in how the metrics
-are reported into buckets. It is an issue either in ESB / Electric Ireland reporting, that they report the intervals
-incorrectly; or it is the device meters that they may do the same.
-
-In either case, I would not expect the total amount to differ: it is just a matter of consumption/cost being reported
-into the wrong hour. If you take the previous and after, the total should be the same.
-
 ## Technical Details
 
 ### Statistics
 
 This integration imports external statistics directly into the HA recorder — no sensor entities are needed for the Energy Dashboard.
 
-* **Electric Ireland Consumption** (`electric_ireland_insights:{account_number}_consumption`): hourly consumption in kWh. Use this in the Energy Dashboard as your grid consumption source.
-* **Electric Ireland Cost** (`electric_ireland_insights:{account_number}_cost`): hourly cost in EUR (gross usage cost with VAT, without discounts or standing charge).
+#### Grid consumption and cost (hourly resolution)
 
-Both statistics are importable in the Energy Dashboard under **Settings → Energy → Grid consumption**.
+| Statistic ID | Description | Unit |
+|---|---|---|
+| `electric_ireland_insights:{account}_consumption` | Hourly electricity consumption | kWh |
+| `electric_ireland_insights:{account}_cost` | Hourly electricity cost (gross, with VAT, no discounts or standing charge) | EUR |
+
+Add these under **Settings → Energy → Grid consumption**.
+
+### Smarter Data Fetching
+
+Before fetching hourly data, the coordinator calls the `/bill-period` endpoint to determine which date ranges actually contain meter data. Hourly requests are then limited to dates within known billing periods rather than blindly fetching the entire lookback window. If the pre-flight call fails, the integration falls back to the full lookback window (30 days on first install, 7 days on subsequent runs). This reduces unnecessary API calls on subsequent updates.
 
 ### Diagnostic Entities
 
@@ -73,11 +72,12 @@ These appear in **Settings → Devices & services** under the integration's devi
     2. Do a POST request to login into Electric Ireland.
     3. Scrape the dashboard to find the `div` with the target Account Number.
     4. Navigate to the Insights page for that Account Number to obtain the meter IDs (partner, contract, premise).
-2. Using the same session, call the MeterInsight API sequentially:
-    1. For each day in the lookback window, request `/MeterInsight/{partner}/{contract}/{premise}/hourly-usage`.
+2. **Pre-flight**: call `/MeterInsight/{partner}/{contract}/{premise}/bill-period` to discover billing period boundaries. Hourly requests are then bounded to dates within known periods. Falls back to the full lookback window if this call fails.
+3. Using the same session, call the MeterInsight API sequentially:
+    1. For each day in the bounded date set, request `/MeterInsight/{partner}/{contract}/{premise}/hourly-usage`.
     2. Each response contains 24 hourly datapoints with consumption (kWh) and cost (EUR) per tariff bucket.
     3. The active tariff bucket (flatRate, offPeak, midPeak, or onPeak) is extracted for each hour.
-3. Import the collected datapoints as external statistics via `async_add_external_statistics`, maintaining cumulative sum continuity with any existing recorded data.
+4. Import the collected datapoints as external statistics via `async_add_external_statistics`, maintaining cumulative sum continuity with any existing recorded data.
 
 ### Schedule
 
@@ -101,6 +101,12 @@ This is a **major architectural change**. If you are upgrading from v0.2.x:
 3. **Old statistics not migrated**: Historical data from v0.2.x will remain in your database but will not be carried over to the new statistic IDs. The integration will re-import up to 30 days of history on first startup.
 
 4. **`homeassistant-historical-sensor` dependency removed**: The alpha library dependency has been removed. No action required — HA will uninstall it automatically.
+
+## Known Limitations
+
+* **1-3 day data delay**: Hourly meter readings are published by ESB with a 1-3 day delay. This integration cannot fetch data faster than ESB publishes it.
+* **Cost excludes discounts and standing charges**: Reported cost is gross tariff cost with VAT. It does not include the 30% Off Direct Debit discount, standing charges, or levies.
+* **Scraping dependency**: The integration authenticates via the Electric Ireland web portal. Changes to the portal's HTML structure may break the login flow until the integration is updated.
 
 ## Acknowledgements
 

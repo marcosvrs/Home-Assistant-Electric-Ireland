@@ -55,11 +55,14 @@ The integration polls the Electric Ireland Insights API **every hour**.
 
 - **First install**: imports up to **30 days** of historical data (backfill).
 - **Subsequent runs**: imports the last **7 days** to pick up newly published readings.
-- **Provider delay**: Electric Ireland publishes meter data with a **1–3 day delay** (data comes from ESB). The `Data Freshness` diagnostic sensor shows how old the latest available reading is.
+- **Pre-flight optimization**: before fetching hourly data, the integration calls the `/bill-period` endpoint to discover which date ranges contain meter data. Hourly requests are then bounded to dates within known billing periods, reducing unnecessary API calls. If the pre-flight call fails, the integration falls back to the full lookback window.
+- **Provider delay**: Electric Ireland publishes meter data with a **1-3 day delay** (data comes from ESB). The `Data Freshness` diagnostic sensor shows how old the latest available reading is.
 
 ## Statistics
 
 This integration imports data as **external statistics** directly into the HA recorder — no sensor entities are needed for the Energy Dashboard.
+
+### Grid consumption and cost (hourly resolution)
 
 | Statistic ID | Description | Unit |
 |---|---|---|
@@ -109,7 +112,7 @@ automation:
 
 ## Known limitations
 
-- **1–3 day data delay**: Hourly readings are published by ESB with a delay; this integration cannot fetch data faster than ESB publishes it.
+- **1-3 day data delay**: Hourly readings are published by ESB with a delay; this integration cannot fetch data faster than ESB publishes it.
 - **Cost excludes discounts and standing charges**: The reported cost is the gross tariff cost with VAT. It does not include the 30% Off Direct Debit discount, standing charges, or levies.
 - **Scraping dependency**: The integration authenticates via the Electric Ireland web portal. Changes to the portal's HTML structure may break the login flow until the integration is updated.
 - **Single account per entry**: Each config entry supports one electricity account. To monitor multiple accounts, add the integration once per account.
