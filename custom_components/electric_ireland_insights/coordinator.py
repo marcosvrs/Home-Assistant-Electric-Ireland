@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, date, datetime, timedelta
 from functools import partial
-from typing import Any, Literal
+from typing import Literal
 
 import aiohttp
 from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
@@ -53,7 +53,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
             update_interval=SCAN_INTERVAL,
             always_update=True,
         )
-        self._config_entry: ConfigEntry[Any] = config_entry
+        self._config_entry = config_entry
         self._account = config_entry.data["account_number"]
         self._api = ElectricIrelandAPI(
             config_entry.data["username"],
@@ -63,6 +63,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
         self._last_update_success = True
         self._has_imported_before = False
         self._bill_periods: list[BillPeriod] = []
+        self._bill_periods_fetched_at: datetime | None = None
         self._session = async_create_clientsession(hass, cookie_jar=aiohttp.CookieJar())
 
     async def _async_update_data(self) -> CoordinatorData:
@@ -117,11 +118,18 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
                     discovered_ids["partner"],
                 )
 
-            try:
-                self._bill_periods = await self._api.get_bill_periods(session, meter_ids)
-            except CannotConnect:
-                _LOGGER.warning("Failed to fetch bill periods, falling back to full lookback window")
-                self._bill_periods = []
+            bill_period_stale = (
+                self._bill_periods_fetched_at is None
+                or (utcnow() - self._bill_periods_fetched_at).total_seconds() > 86400
+            )
+            if bill_period_stale:
+                try:
+                    self._bill_periods = await self._api.get_bill_periods(session, meter_ids)
+                    self._bill_periods_fetched_at = utcnow()
+                except CannotConnect:
+                    _LOGGER.warning("Failed to fetch bill periods, falling back to full lookback window")
+                    if not self._bill_periods:
+                        self._bill_periods = []
 
             yesterday = (datetime.now(UTC) - timedelta(days=1)).date()
             all_lookback_dates = {yesterday - timedelta(days=i) for i in range(lookback)}

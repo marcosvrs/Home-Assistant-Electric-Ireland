@@ -471,8 +471,8 @@ async def test_get_data_client_error() -> None:
         m.get(url, exception=aiohttp.ClientError("network error"))
         async with aiohttp.ClientSession() as session:
             client = MeterInsightClient(session, meter_ids)
-            result = await client.get_data(target_date)
-    assert result == []
+            with pytest.raises(CannotConnect):
+                await client.get_data(target_date)
 
 
 @pytest.mark.asyncio

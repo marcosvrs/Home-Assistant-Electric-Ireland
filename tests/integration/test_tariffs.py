@@ -43,6 +43,7 @@ def _entry(account: str = ACCOUNT_1) -> MockConfigEntry:
             "partner_id": PARTNER,
             "contract_id": CONTRACT,
             "premise_id": PREMISE,
+            "tariff_stats_initialized": True,
         },
         unique_id=account,
         version=2,

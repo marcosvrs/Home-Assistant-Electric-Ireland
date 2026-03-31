@@ -9,8 +9,8 @@ rules:
     status: exempt
     comment: No custom actions exist, so there are no action exceptions to document.
   brands:
-    status: done
-    comment: Brand assets in brands/ directory (icon.png, icon@2x.png, logo.svg sourced from electricireland.ie).
+    status: todo
+    comment: Brand assets in brands/ directory. Not yet submitted to home-assistant/brands repository.
   common-modules:
     status: done
     comment: Code is split into coordinator.py, config_flow.py, sensor.py, and diagnostics.py.

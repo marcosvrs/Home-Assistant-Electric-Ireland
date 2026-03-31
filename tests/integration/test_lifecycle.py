@@ -43,12 +43,14 @@ def _entry(
     contract: str = CONTRACT,
     premise: str = PREMISE,
     version: int = 2,
+    tariff_initialized: bool = True,
 ) -> MockConfigEntry:
     """Build a MockConfigEntry, optionally with cached meter IDs."""
     data: dict = {
         "username": "u@test.com",
         "password": "pass",
         "account_number": account,
+        "tariff_stats_initialized": tariff_initialized,
     }
     if cached:
         data.update(partner_id=partner, contract_id=contract, premise_id=premise)

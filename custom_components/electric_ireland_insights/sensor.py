@@ -71,6 +71,7 @@ async def async_setup_entry(
 
 
 class ElectricIrelandDiagnosticSensor(CoordinatorEntity[ElectricIrelandCoordinator], SensorEntity):  # type: ignore[misc]
+    entity_description: ElectricIrelandSensorDescription
     _attr_has_entity_name = True
 
     def __init__(
@@ -80,7 +81,7 @@ class ElectricIrelandDiagnosticSensor(CoordinatorEntity[ElectricIrelandCoordinat
         account_number: str,
     ) -> None:
         super().__init__(coordinator)
-        self._description = description
+        self.entity_description = description
         self._attr_unique_id = f"{DOMAIN}_{account_number}_{description.key}"
         self._attr_entity_registry_enabled_default = False
         self._attr_device_info = DeviceInfo(
@@ -95,4 +96,4 @@ class ElectricIrelandDiagnosticSensor(CoordinatorEntity[ElectricIrelandCoordinat
     def native_value(self) -> datetime | float | int | None:
         if self.coordinator.data is None:
             return None
-        return self._description.value_fn(self.coordinator.data)
+        return self.entity_description.value_fn(self.coordinator.data)
