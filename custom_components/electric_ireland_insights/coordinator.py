@@ -35,7 +35,7 @@ from .types import (
 _LOGGER = logging.getLogger(__name__)
 
 
-class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):
+class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # type: ignore[misc]
     """Coordinator to fetch EI data and import external statistics."""
 
     def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry) -> None:

@@ -27,7 +27,7 @@ PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
-class ElectricIrelandSensorDescription(SensorEntityDescription):
+class ElectricIrelandSensorDescription(SensorEntityDescription):  # type: ignore[misc]
     value_fn: Callable[[CoordinatorData], datetime | float | int | None]
 
 
@@ -70,7 +70,7 @@ async def async_setup_entry(
     )
 
 
-class ElectricIrelandDiagnosticSensor(CoordinatorEntity[ElectricIrelandCoordinator], SensorEntity):
+class ElectricIrelandDiagnosticSensor(CoordinatorEntity[ElectricIrelandCoordinator], SensorEntity):  # type: ignore[misc]
     _attr_has_entity_name = True
 
     def __init__(

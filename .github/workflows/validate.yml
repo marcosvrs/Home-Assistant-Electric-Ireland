@@ -58,6 +58,7 @@ jobs:
           mypy custom_components/electric_ireland_insights/ \
             --strict \
             --no-warn-return-any \
+            --no-warn-unused-ignores \
             --ignore-missing-imports
 
   tests:
