@@ -8,6 +8,7 @@ from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.statistics import statistics_during_period
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import UpdateFailed
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
 )
@@ -137,9 +138,118 @@ async def test_subsequent_run_imports_7_days(recorder_mock, hass, mock_config_en
         assert mock_api_instance.get_hourly_usage.call_count == LOOKUP_DAYS
 
 
-# ---------------------------------------------------------------------------
-# Test 3: Consumption statistics have correct sum and state values
-# ---------------------------------------------------------------------------
+async def test_tariff_backfill_uses_30_days_when_flag_missing(recorder_mock, hass):
+    """async_tariff_backfill fetches INITIAL_LOOKBACK_DAYS and sets the flag."""
+    entry = MockConfigEntry(
+        domain="electric_ireland_insights",
+        data={
+            "username": "test@test.com",
+            "password": "testpass",
+            "account_number": ACCOUNT,
+        },
+        unique_id=ACCOUNT,
+    )
+    entry.add_to_hass(hass)
+
+    with (
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
+    ):
+        mock_api_instance = AsyncMock()
+        _setup_api_mock(
+            mock_api_instance,
+            hourly_side_effect=[make_datapoints(1)] + [[] for _ in range(50)],
+        )
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import (
+            ElectricIrelandCoordinator,
+        )
+
+        coordinator = ElectricIrelandCoordinator(hass, entry)
+        await coordinator.async_tariff_backfill()
+
+        assert mock_api_instance.get_hourly_usage.call_count == INITIAL_LOOKBACK_DAYS
+
+    assert entry.data.get("tariff_stats_initialized") is True
+
+
+async def test_tariff_backfill_skips_when_flag_set(recorder_mock, hass, mock_config_entry):
+    """async_tariff_backfill is a no-op when tariff_stats_initialized is already True."""
+    mock_config_entry.add_to_hass(hass)
+    assert mock_config_entry.data.get("tariff_stats_initialized") is True
+
+    with (
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import (
+            ElectricIrelandCoordinator,
+        )
+
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+        await coordinator.async_tariff_backfill()
+
+        mock_api_instance.authenticate.assert_not_called()
+
+
+async def test_tariff_backfill_handles_auth_failure(recorder_mock, hass):
+    """async_tariff_backfill logs warning and does NOT set flag on auth failure."""
+    entry = MockConfigEntry(
+        domain="electric_ireland_insights",
+        data={"username": "t@t.com", "password": "p", "account_number": ACCOUNT},
+        unique_id=ACCOUNT,
+    )
+    entry.add_to_hass(hass)
+
+    with (
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
+    ):
+        mock_api_instance = AsyncMock()
+        mock_api_instance.authenticate = AsyncMock(side_effect=InvalidAuth("bad creds"))
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import ElectricIrelandCoordinator
+
+        coordinator = ElectricIrelandCoordinator(hass, entry)
+        await coordinator.async_tariff_backfill()
+
+    assert entry.data.get("tariff_stats_initialized") is None
+
+
+async def test_tariff_backfill_retries_on_cached_ids_invalid(recorder_mock, hass):
+    """CachedIdsInvalid mid-backfill triggers re-auth and retries the day."""
+    entry = MockConfigEntry(
+        domain="electric_ireland_insights",
+        data={"username": "t@t.com", "password": "p", "account_number": ACCOUNT},
+        unique_id=ACCOUNT,
+    )
+    entry.add_to_hass(hass)
+
+    with (
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
+    ):
+        mock_api_instance = AsyncMock()
+        ids = {"partner": "P", "contract": "C", "premise": "PR"}
+        mock_api_instance.authenticate = AsyncMock(return_value=(ids, ids))
+        mock_api_instance.get_bill_periods = AsyncMock(return_value=[])
+        mock_api_instance.get_hourly_usage = AsyncMock(
+            side_effect=[CachedIdsInvalid("stale")] + [make_datapoints(1)] + [[] for _ in range(50)]
+        )
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import ElectricIrelandCoordinator
+
+        coordinator = ElectricIrelandCoordinator(hass, entry)
+        await coordinator.async_tariff_backfill()
+
+    assert entry.data.get("tariff_stats_initialized") is True
+    assert mock_api_instance.authenticate.call_count == 2
 
 
 async def test_consumption_statistics_correct(recorder_mock, hass, mock_config_entry):

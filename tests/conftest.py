@@ -54,6 +54,7 @@ def mock_config_entry():
             "username": "test@test.com",
             "password": "testpass",
             "account_number": "951785073",
+            "tariff_stats_initialized": True,
         },
         unique_id="951785073",
     )

@@ -96,6 +96,53 @@ def hourly_json(
     }
 
 
+def make_hourly_callback(tariff_schedule: dict[int, str] | str = "flatRate"):
+    """Factory for aioresponses callbacks with configurable tariff per hour.
+
+    Args:
+        tariff_schedule: Either a single tariff string (applied to all hours),
+            or a dict mapping hour (0-23) to tariff key string.
+            Hours not in the dict get no tariff bucket (all nulls).
+    """
+
+    def _callback(url, **kwargs):
+        date_str = url.query.get("date", "2024-01-20")
+        dt = datetime.fromisoformat(date_str).replace(tzinfo=UTC)
+        prefix = dt.strftime("%Y-%m-%dT")
+
+        data = []
+        for hour in range(24):
+            if isinstance(tariff_schedule, str):
+                active: str | None = tariff_schedule
+            elif hour in tariff_schedule:
+                active = tariff_schedule[hour]
+            else:
+                active = None
+
+            buckets: dict = {"flatRate": None, "offPeak": None, "midPeak": None, "onPeak": None}
+            if active is not None:
+                buckets[active] = {
+                    "consumption": round(0.5 + hour * 0.05, 2),
+                    "cost": round(0.10 + hour * 0.01, 2),
+                }
+
+            data.append(
+                {
+                    "startDate": f"{prefix}{hour:02d}:00:00Z",
+                    "endDate": f"{prefix}{hour:02d}:59:59Z",
+                    **buckets,
+                }
+            )
+
+        return CallbackResult(
+            status=200,
+            body=json.dumps({"isSuccess": True, "data": data}),
+            content_type="application/json",
+        )
+
+    return _callback
+
+
 def hourly_callback(url, **kwargs):
     """``aioresponses`` callback — returns date-aware hourly data."""
     date_str = url.query.get("date", "2024-01-20")

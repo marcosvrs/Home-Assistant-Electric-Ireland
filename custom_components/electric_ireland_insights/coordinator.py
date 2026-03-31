@@ -283,6 +283,84 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
             _LOGGER.exception("Unexpected error during update")
             raise UpdateFailed(f"Unexpected error: {err}") from err
 
+    async def async_tariff_backfill(self) -> None:
+        """One-time background backfill of per-tariff stats with INITIAL_LOOKBACK_DAYS window.
+
+        Called once after setup when aggregate stats exist but tariff_stats_initialized is unset.
+        Uses a fresh session so it doesn't interfere with the normal polling cycle.
+        """
+        if self._config_entry.data.get("tariff_stats_initialized"):
+            return
+
+        _LOGGER.info(
+            "Starting background tariff backfill (%d days)",
+            INITIAL_LOOKBACK_DAYS,
+        )
+
+        session = async_create_clientsession(self.hass, cookie_jar=aiohttp.CookieJar())
+        try:
+            meter_ids, _ = await self._api.authenticate(session, None)
+
+            yesterday = (datetime.now(UTC) - timedelta(days=1)).date()
+            dates = sorted(yesterday - timedelta(days=i) for i in range(INITIAL_LOOKBACK_DAYS))
+
+            datapoints: list[ElectricIrelandDatapoint] = []
+            for target_date in dates:
+                try:
+                    day_data = await self._api.get_hourly_usage(session, meter_ids, target_date)
+                    datapoints.extend(day_data)
+                except CachedIdsInvalid:
+                    session.cookie_jar.clear()
+                    meter_ids, _ = await self._api.authenticate(session, None)
+                    day_data = await self._api.get_hourly_usage(session, meter_ids, target_date)
+                    datapoints.extend(day_data)
+
+            if datapoints:
+                await self._insert_statistics(
+                    datapoints,
+                    "consumption",
+                    f"{DOMAIN}:{self._account}_consumption",
+                    UnitOfEnergy.KILO_WATT_HOUR,
+                )
+                await self._insert_statistics(
+                    datapoints,
+                    "cost",
+                    f"{DOMAIN}:{self._account}_cost",
+                    "EUR",
+                )
+
+                buckets: dict[str, list[ElectricIrelandDatapoint]] = {}
+                for dp in datapoints:
+                    buckets.setdefault(dp["tariff_bucket"], []).append(dp)
+
+                seen_buckets = set(buckets.keys())
+                if len(seen_buckets) > 1 or (len(seen_buckets) == 1 and "flat_rate" not in seen_buckets):
+                    for bucket_name, bucket_dps in buckets.items():
+                        display = TARIFF_BUCKET_MAP_DISPLAY.get(bucket_name, bucket_name.replace("_", " ").title())
+                        await self._insert_statistics(
+                            bucket_dps,
+                            "consumption",
+                            f"{DOMAIN}:{self._account}_consumption_{bucket_name}",
+                            UnitOfEnergy.KILO_WATT_HOUR,
+                            name_override=f"Electric Ireland Consumption {display} ({self._account})",
+                        )
+                        await self._insert_statistics(
+                            bucket_dps,
+                            "cost",
+                            f"{DOMAIN}:{self._account}_cost_{bucket_name}",
+                            "EUR",
+                            name_override=f"Electric Ireland Cost {display} ({self._account})",
+                        )
+
+            new_data = {**dict(self._config_entry.data), "tariff_stats_initialized": True}
+            self.hass.config_entries.async_update_entry(self._config_entry, data=new_data)
+            _LOGGER.info("Background tariff backfill complete (%d datapoints)", len(datapoints))
+
+        except (InvalidAuth, CannotConnect) as err:
+            _LOGGER.warning("Tariff backfill failed (will retry next restart): %s", err)
+        except Exception:
+            _LOGGER.exception("Unexpected error during tariff backfill")
+
     async def _insert_statistics(
         self,
         datapoints: list[ElectricIrelandDatapoint],

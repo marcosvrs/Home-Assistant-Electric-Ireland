@@ -46,6 +46,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ElectricIrelandConfigEnt
 
     entry.async_on_unload(coordinator.async_add_listener(lambda: None))
 
+    if not entry.data.get("tariff_stats_initialized"):
+        entry.async_create_background_task(
+            hass,
+            coordinator.async_tariff_backfill(),
+            "electric_ireland_tariff_backfill",
+        )
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     return True
