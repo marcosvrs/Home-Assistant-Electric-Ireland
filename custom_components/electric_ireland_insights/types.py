@@ -21,6 +21,8 @@ class CoordinatorData(TypedDict):
     datapoint_count: int
     latest_data_timestamp: datetime | None
     import_error: str | None
+    appliance_count: int
+    bill_periods_available: int
 
 
 class MeterIds(TypedDict):
@@ -29,3 +31,17 @@ class MeterIds(TypedDict):
     partner: str
     contract: str
     premise: str
+
+
+class BillPeriod(TypedDict):
+    startDate: str
+    endDate: str
+    current: bool
+    hasAppliance: bool
+
+
+class BillPeriodResponse(TypedDict):
+    subStatusCode: str
+    isSuccess: bool
+    message: str
+    data: list[BillPeriod]
