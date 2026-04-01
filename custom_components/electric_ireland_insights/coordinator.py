@@ -8,7 +8,7 @@ from functools import partial
 from typing import Literal
 
 import aiohttp
-from homeassistant.components.recorder import get_instance
+from homeassistant.components.recorder import get_instance  # type: ignore[attr-defined]
 from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
 from homeassistant.components.recorder.statistics import (
     async_add_external_statistics,

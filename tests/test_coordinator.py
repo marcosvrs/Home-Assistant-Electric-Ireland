@@ -547,7 +547,7 @@ async def test_sum_continuity_across_runs(recorder_mock, hass, mock_config_entry
 # ---------------------------------------------------------------------------
 
 
-async def test_auth_error_raises_config_entry_auth_failed(hass, mock_config_entry):
+async def test_auth_error_raises_config_entry_auth_failed(recorder_mock, hass, mock_config_entry):
     """Test that InvalidAuth from API raises ConfigEntryAuthFailed."""
     mock_config_entry.add_to_hass(hass)
 
@@ -581,7 +581,7 @@ async def test_auth_error_raises_config_entry_auth_failed(hass, mock_config_entr
 # ---------------------------------------------------------------------------
 
 
-async def test_connection_error_raises_update_failed(hass, mock_config_entry):
+async def test_connection_error_raises_update_failed(recorder_mock, hass, mock_config_entry):
     """Test that CannotConnect from API raises UpdateFailed."""
     mock_config_entry.add_to_hass(hass)
 
