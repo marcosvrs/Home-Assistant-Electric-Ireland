@@ -63,5 +63,11 @@
         "name": "Data Freshness"
       }
     }
+  },
+  "issues": {
+    "data_gap": {
+      "title": "No new energy data for {days} days",
+      "description": "Account {account} has not received new energy data from Electric Ireland for {days} days. This typically happens when ESB meter reads are delayed. The integration will automatically resume importing when data becomes available."
+    }
   }
 }

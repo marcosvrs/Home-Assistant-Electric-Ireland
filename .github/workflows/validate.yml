@@ -52,7 +52,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install dependencies
-        run: pip install mypy types-beautifulsoup4
+        run: pip install ".[dev]"
       - name: Run mypy strict
         run: |
           mypy custom_components/electric_ireland_insights/ \

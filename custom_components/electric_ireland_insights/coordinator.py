@@ -19,11 +19,13 @@ from homeassistant.const import UnitOfEnergy
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
+from homeassistant.helpers.issue_registry import IssueSeverity, async_create_issue, async_delete_issue
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util.dt import now as dt_now
 from homeassistant.util.dt import utcnow
 
 from .api import ElectricIrelandAPI
-from .const import DOMAIN, INITIAL_LOOKBACK_DAYS, LOOKUP_DAYS, SCAN_INTERVAL
+from .const import DATA_GAP_THRESHOLD_DAYS, DOMAIN, INITIAL_LOOKBACK_DAYS, LOOKUP_DAYS, SCAN_INTERVAL
 from .exceptions import CachedIdsInvalid, CannotConnect, InvalidAuth
 from .types import (
     BillPeriod,
@@ -66,6 +68,26 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
         self._bill_periods_fetched_at: datetime | None = None
         self._session = async_create_clientsession(hass, cookie_jar=aiohttp.CookieJar())
 
+    def _check_data_gap(self, result: CoordinatorData) -> None:
+        latest_ts = result.get("latest_data_timestamp")
+        if latest_ts is not None:
+            gap_days = (utcnow() - latest_ts).total_seconds() / 86400
+            if gap_days > DATA_GAP_THRESHOLD_DAYS:
+                async_create_issue(
+                    self.hass,
+                    DOMAIN,
+                    f"data_gap_{self._account}",
+                    is_fixable=False,
+                    severity=IssueSeverity.WARNING,
+                    translation_key="data_gap",
+                    translation_placeholders={
+                        "account": self._account,
+                        "days": str(round(gap_days, 1)),
+                    },
+                )
+            else:
+                async_delete_issue(self.hass, DOMAIN, f"data_gap_{self._account}")
+
     async def _async_update_data(self) -> CoordinatorData:
         session = self._session
         was_successful = self._last_update_success
@@ -74,6 +96,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
             self._last_update_success = True
             if not was_successful:
                 _LOGGER.info("Connection restored — data import resumed")
+            self._check_data_gap(result)
             return result
 
         try:
@@ -131,7 +154,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
                     if not self._bill_periods:
                         self._bill_periods = []
 
-            yesterday = (datetime.now(UTC) - timedelta(days=1)).date()
+            yesterday = (dt_now() - timedelta(days=1)).date()
             all_lookback_dates = {yesterday - timedelta(days=i) for i in range(lookback)}
 
             if self._bill_periods:
@@ -260,11 +283,23 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
                     )
 
             last_ts = max((dp["intervalEnd"] for dp in datapoints), default=None)
+            latest_data_ts = datetime.fromtimestamp(last_ts, tz=UTC) if last_ts else None
+
+            self.hass.bus.async_fire(
+                f"{DOMAIN}_data_imported",
+                {
+                    "account": self._account,
+                    "datapoint_count": len(datapoints),
+                    "latest_data_timestamp": latest_data_ts.isoformat() if latest_data_ts else None,
+                    "tariff_buckets": sorted(seen_buckets),
+                },
+            )
+
             return _mark_success(
                 {
                     "last_import": utcnow(),
                     "datapoint_count": len(datapoints),
-                    "latest_data_timestamp": (datetime.fromtimestamp(last_ts, tz=UTC) if last_ts else None),
+                    "latest_data_timestamp": latest_data_ts,
                     "import_error": None,
                     "appliance_count": 0,
                     "bill_periods_available": len(self._bill_periods),
@@ -292,25 +327,44 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
             raise UpdateFailed(f"Unexpected error: {err}") from err
 
     async def async_tariff_backfill(self) -> None:
-        """One-time background backfill of per-tariff stats with INITIAL_LOOKBACK_DAYS window.
+        """One-time background backfill using all available bill periods.
 
-        Called once after setup when aggregate stats exist but tariff_stats_initialized is unset.
-        Uses a fresh session so it doesn't interfere with the normal polling cycle.
+        Called once after setup when tariff_stats_initialized is unset.
+        Uses bill periods to determine the full historical date range, then
+        fetches every available day sequentially.
         """
         if self._config_entry.data.get("tariff_stats_initialized"):
             return
-
-        _LOGGER.info(
-            "Starting background tariff backfill (%d days)",
-            INITIAL_LOOKBACK_DAYS,
-        )
 
         session = async_create_clientsession(self.hass, cookie_jar=aiohttp.CookieJar())
         try:
             meter_ids, _ = await self._api.authenticate(session, None)
 
-            yesterday = (datetime.now(UTC) - timedelta(days=1)).date()
-            dates = sorted(yesterday - timedelta(days=i) for i in range(INITIAL_LOOKBACK_DAYS))
+            try:
+                bill_periods = await self._api.get_bill_periods(session, meter_ids)
+            except CannotConnect:
+                bill_periods = []
+
+            yesterday = (dt_now() - timedelta(days=1)).date()
+
+            if bill_periods:
+                earliest = min(date.fromisoformat(bp["startDate"][:10]) for bp in bill_periods)
+                all_dates: set[date] = set()
+                d = earliest
+                while d <= yesterday:
+                    all_dates.add(d)
+                    d += timedelta(days=1)
+            else:
+                all_dates = {yesterday - timedelta(days=i) for i in range(INITIAL_LOOKBACK_DAYS)}
+
+            _LOGGER.info(
+                "Starting background backfill (%d days, %s to %s)",
+                len(all_dates),
+                min(all_dates),
+                max(all_dates),
+            )
+
+            dates = sorted(all_dates)
 
             datapoints: list[ElectricIrelandDatapoint] = []
             for target_date in dates:
@@ -362,12 +416,12 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
 
             new_data = {**dict(self._config_entry.data), "tariff_stats_initialized": True}
             self.hass.config_entries.async_update_entry(self._config_entry, data=new_data)
-            _LOGGER.info("Background tariff backfill complete (%d datapoints)", len(datapoints))
+            _LOGGER.info("Background backfill complete (%d datapoints)", len(datapoints))
 
         except (InvalidAuth, CannotConnect) as err:
-            _LOGGER.warning("Tariff backfill failed (will retry next restart): %s", err)
+            _LOGGER.warning("Background backfill failed (will retry next restart): %s", err)
         except Exception:
-            _LOGGER.exception("Unexpected error during tariff backfill")
+            _LOGGER.exception("Unexpected error during background backfill")
 
     async def _insert_statistics(
         self,

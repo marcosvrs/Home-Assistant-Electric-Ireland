@@ -132,8 +132,8 @@ rules:
     status: done
     comment: T8 added reconfigure flow in config_flow.py.
   repair-issues:
-    status: exempt
-    comment: Authentication failures are handled via the reauth flow (HA recommended pattern). No other user-actionable issues require the repair issues system.
+    status: done
+    comment: coordinator.py creates a repair issue when no new energy data arrives for >5 days.
   runtime-data:
     status: done
     comment: __init__.py assigns entry.runtime_data = coordinator.

@@ -10,6 +10,7 @@ NAME = "Electric Ireland Insights"
 LOOKUP_DAYS = 7
 INITIAL_LOOKBACK_DAYS = 30
 SCAN_INTERVAL = timedelta(hours=1)
+DATA_GAP_THRESHOLD_DAYS = 5
 
 # Maps API tariff bucket keys to stable snake_case identifiers used in
 # statistic IDs (e.g. ``electric_ireland_insights:{acct}_consumption_off_peak``).

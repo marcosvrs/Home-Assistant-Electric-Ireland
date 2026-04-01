@@ -7,13 +7,16 @@ import pytest
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.statistics import statistics_during_period
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.issue_registry import async_get as async_get_issue_registry
 from homeassistant.helpers.update_coordinator import UpdateFailed
+from homeassistant.util.dt import utcnow
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
 )
 
 from custom_components.electric_ireland_insights.const import (
+    DATA_GAP_THRESHOLD_DAYS,
     DOMAIN,
     INITIAL_LOOKBACK_DAYS,
     LOOKUP_DAYS,
@@ -1459,3 +1462,291 @@ async def test_single_non_flat_bucket_creates_per_tariff_stats(recorder_mock, ha
     )
     assert stat_off in stats
     assert len(stats[stat_off]) == 24
+
+
+# ===========================================================================
+# EVENT FIRING TESTS
+# ===========================================================================
+
+
+async def test_event_fired_on_successful_import(recorder_mock, hass, mock_config_entry):
+    """Successful data import fires electric_ireland_insights_data_imported event."""
+    mock_config_entry.add_to_hass(hass)
+
+    datapoints = make_datapoints(1)
+
+    events: list = []
+    hass.bus.async_listen(
+        f"{DOMAIN}_data_imported",
+        lambda event: events.append(event),
+    )
+
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
+    ):
+        mock_api_instance = AsyncMock()
+        _setup_api_mock(
+            mock_api_instance,
+            hourly_side_effect=[datapoints] + [[] for _ in range(50)],
+        )
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import (
+            ElectricIrelandCoordinator,
+        )
+
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+        await coordinator._async_update_data()
+
+    await hass.async_block_till_done()
+
+    assert len(events) == 1
+    event_data = events[0].data
+    assert event_data["account"] == ACCOUNT
+    assert event_data["datapoint_count"] == 24
+    assert event_data["tariff_buckets"] == ["off_peak"]
+    assert event_data["latest_data_timestamp"] is not None
+
+
+# ===========================================================================
+# DATA GAP REPAIR ISSUE TESTS (F3)
+# ===========================================================================
+
+
+async def test_repair_issue_created_when_data_stale(recorder_mock, hass, mock_config_entry):
+    """_check_data_gap creates a repair issue when latest_data_timestamp is >5 days old."""
+    mock_config_entry.add_to_hass(hass)
+
+    stale_ts = datetime(2026, 3, 20, 0, 0, tzinfo=UTC)
+    now_ts = datetime(2026, 3, 28, 0, 0, tzinfo=UTC)
+
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
+        patch("custom_components.electric_ireland_insights.coordinator.utcnow", return_value=now_ts),
+    ):
+        mock_api_instance = AsyncMock()
+        dps = make_datapoints(1, base_ts=int(stale_ts.timestamp()))
+        _setup_api_mock(mock_api_instance, hourly_side_effect=[dps] + [[] for _ in range(50)])
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import ElectricIrelandCoordinator
+
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+        result = await coordinator._async_update_data()
+
+    assert result["datapoint_count"] == 24
+
+    issue_registry = async_get_issue_registry(hass)
+    issue = issue_registry.async_get_issue(DOMAIN, f"data_gap_{ACCOUNT}")
+    assert issue is not None
+    assert issue.severity == "warning"
+
+
+async def test_repair_issue_deleted_when_data_fresh(recorder_mock, hass, mock_config_entry):
+    """_check_data_gap deletes the repair issue when data is within threshold."""
+    mock_config_entry.add_to_hass(hass)
+
+    from homeassistant.helpers.issue_registry import IssueSeverity, async_create_issue
+
+    async_create_issue(
+        hass,
+        DOMAIN,
+        f"data_gap_{ACCOUNT}",
+        is_fixable=False,
+        severity=IssueSeverity.WARNING,
+        translation_key="data_gap",
+        translation_placeholders={"account": ACCOUNT, "days": "7.0"},
+    )
+
+    issue_registry = async_get_issue_registry(hass)
+    assert issue_registry.async_get_issue(DOMAIN, f"data_gap_{ACCOUNT}") is not None
+
+    fresh_ts = datetime(2026, 3, 27, 0, 0, tzinfo=UTC)
+    now_ts = datetime(2026, 3, 28, 0, 0, tzinfo=UTC)
+
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
+        patch("custom_components.electric_ireland_insights.coordinator.utcnow", return_value=now_ts),
+    ):
+        mock_api_instance = AsyncMock()
+        dps = make_datapoints(1, base_ts=int(fresh_ts.timestamp()))
+        _setup_api_mock(mock_api_instance, hourly_side_effect=[dps] + [[] for _ in range(50)])
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import ElectricIrelandCoordinator
+
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+        await coordinator._async_update_data()
+
+    assert issue_registry.async_get_issue(DOMAIN, f"data_gap_{ACCOUNT}") is None
+
+
+async def test_no_repair_issue_when_no_data_yet(recorder_mock, hass, mock_config_entry):
+    """No repair issue created when latest_data_timestamp is None (first run, no data)."""
+    mock_config_entry.add_to_hass(hass)
+
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
+    ):
+        mock_api_instance = AsyncMock()
+        _setup_api_mock(mock_api_instance, hourly_side_effect=[[] for _ in range(50)])
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import ElectricIrelandCoordinator
+
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+        result = await coordinator._async_update_data()
+
+    assert result["latest_data_timestamp"] is None
+
+    issue_registry = async_get_issue_registry(hass)
+    assert issue_registry.async_get_issue(DOMAIN, f"data_gap_{ACCOUNT}") is None
+
+
+async def test_repair_issue_at_exact_threshold_boundary(recorder_mock, hass, mock_config_entry):
+    """Data exactly DATA_GAP_THRESHOLD_DAYS old does NOT trigger a repair issue."""
+    mock_config_entry.add_to_hass(hass)
+
+    now_ts = datetime(2026, 3, 28, 0, 0, tzinfo=UTC)
+    boundary_ts = now_ts - timedelta(days=DATA_GAP_THRESHOLD_DAYS)
+
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
+        patch("custom_components.electric_ireland_insights.coordinator.utcnow", return_value=now_ts),
+    ):
+        mock_api_instance = AsyncMock()
+        dps = make_datapoints(1, base_ts=int(boundary_ts.timestamp()))
+        _setup_api_mock(mock_api_instance, hourly_side_effect=[dps] + [[] for _ in range(50)])
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import ElectricIrelandCoordinator
+
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+        await coordinator._async_update_data()
+
+    issue_registry = async_get_issue_registry(hass)
+    assert issue_registry.async_get_issue(DOMAIN, f"data_gap_{ACCOUNT}") is None
+
+
+# ===========================================================================
+# BILL PERIOD CACHING TESTS (I9)
+# ===========================================================================
+
+
+async def test_bill_periods_cached_across_runs(recorder_mock, hass, mock_config_entry):
+    """Bill periods are only fetched once and reused on subsequent coordinator runs."""
+    mock_config_entry.add_to_hass(hass)
+
+    bill_periods = [{"startDate": "2026-03-01T00:00:00Z", "endDate": "2026-03-31T00:00:00Z"}]
+
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={STAT_ID_CONSUMPTION: [{"sum": 100.0}]},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
+    ):
+        mock_api_instance = AsyncMock()
+        _setup_api_mock(mock_api_instance)
+        mock_api_instance.get_bill_periods = AsyncMock(return_value=bill_periods)
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import ElectricIrelandCoordinator
+
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+
+        await coordinator._async_update_data()
+        assert mock_api_instance.get_bill_periods.call_count == 1
+
+        await coordinator._async_update_data()
+        assert mock_api_instance.get_bill_periods.call_count == 1
+
+
+async def test_bill_periods_refetched_after_24h(recorder_mock, hass, mock_config_entry):
+    """Bill periods are re-fetched when the cache exceeds 24 hours."""
+    mock_config_entry.add_to_hass(hass)
+
+    bill_periods = [{"startDate": "2026-03-01T00:00:00Z", "endDate": "2026-03-31T00:00:00Z"}]
+
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={STAT_ID_CONSUMPTION: [{"sum": 100.0}]},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
+    ):
+        mock_api_instance = AsyncMock()
+        _setup_api_mock(mock_api_instance)
+        mock_api_instance.get_bill_periods = AsyncMock(return_value=bill_periods)
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import ElectricIrelandCoordinator
+
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+
+        await coordinator._async_update_data()
+        assert mock_api_instance.get_bill_periods.call_count == 1
+
+        coordinator._bill_periods_fetched_at = utcnow() - timedelta(hours=25)
+
+        await coordinator._async_update_data()
+        assert mock_api_instance.get_bill_periods.call_count == 2
+
+
+async def test_bill_period_cache_preserves_data_on_failure(recorder_mock, hass, mock_config_entry):
+    """When bill period re-fetch fails, previously cached periods are preserved."""
+    mock_config_entry.add_to_hass(hass)
+
+    bill_periods = [{"startDate": "2026-03-01T00:00:00Z", "endDate": "2026-03-31T00:00:00Z"}]
+
+    with (
+        patch(
+            "custom_components.electric_ireland_insights.coordinator.get_last_statistics",
+            return_value={STAT_ID_CONSUMPTION: [{"sum": 100.0}]},
+        ),
+        patch("custom_components.electric_ireland_insights.coordinator.ElectricIrelandAPI") as mock_api_class,
+        patch("custom_components.electric_ireland_insights.coordinator.async_create_clientsession"),
+    ):
+        mock_api_instance = AsyncMock()
+        _setup_api_mock(mock_api_instance)
+        mock_api_instance.get_bill_periods = AsyncMock(side_effect=[bill_periods, CannotConnect("network down")])
+        mock_api_class.return_value = mock_api_instance
+
+        from custom_components.electric_ireland_insights.coordinator import ElectricIrelandCoordinator
+
+        coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
+
+        await coordinator._async_update_data()
+        assert coordinator._bill_periods == bill_periods
+
+        coordinator._bill_periods_fetched_at = utcnow() - timedelta(hours=25)
+
+        await coordinator._async_update_data()
+        assert coordinator._bill_periods == bill_periods

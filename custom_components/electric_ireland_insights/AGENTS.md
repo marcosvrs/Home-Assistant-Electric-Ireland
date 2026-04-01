@@ -63,7 +63,6 @@ HA Recorder → Energy Dashboard
 
 - **NEVER** create sensor entities for consumption/cost — external statistics only.
 - **NEVER** fire concurrent API requests — Electric Ireland rate-limits aggressively.
-- **NEVER** cache the aiohttp session across coordinator updates — create fresh per update cycle (login required each time).
 - **NEVER** store runtime data in `hass.data[DOMAIN]` — use `entry.runtime_data`.
 - **NEVER** use `requests` or any sync HTTP library — async only via `async_create_clientsession`.
 - **NEVER** hardcode meter IDs — discover from website, cache in config entry.
