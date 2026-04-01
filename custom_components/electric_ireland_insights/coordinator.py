@@ -8,6 +8,7 @@ from functools import partial
 from typing import Literal
 
 import aiohttp
+from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
 from homeassistant.components.recorder.statistics import (
     async_add_external_statistics,
@@ -102,7 +103,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
         try:
             stat_id = f"{DOMAIN}:{self._account}_consumption"
             statistic_types: set[Literal["last_reset", "max", "mean", "min", "state", "sum"]] = {"sum"}
-            existing = await self.hass.async_add_executor_job(
+            existing = await get_instance(self.hass).async_add_executor_job(
                 partial(get_last_statistics, self.hass, 1, stat_id, True, statistic_types)
             )
             lookback = LOOKUP_DAYS if existing else INITIAL_LOOKBACK_DAYS
@@ -448,7 +449,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
         overlap_start = filtered[0][0]
 
         statistic_types: set[Literal["change", "last_reset", "max", "mean", "min", "state", "sum"]] = {"sum"}
-        existing_before = await self.hass.async_add_executor_job(
+        existing_before = await get_instance(self.hass).async_add_executor_job(
             partial(
                 statistics_during_period,
                 self.hass,
