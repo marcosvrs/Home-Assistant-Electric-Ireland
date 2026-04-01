@@ -452,7 +452,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
             partial(
                 statistics_during_period,
                 self.hass,
-                overlap_start - timedelta(hours=1),
+                overlap_start - timedelta(days=2),
                 overlap_start,
                 {statistic_id},
                 "hour",
