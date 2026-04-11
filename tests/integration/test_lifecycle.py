@@ -17,7 +17,7 @@ from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.electric_ireland_insights.const import DOMAIN, INITIAL_LOOKBACK_DAYS
+from custom_components.electric_ireland_insights.const import DOMAIN, LOOKUP_DAYS
 
 from .conftest import (
     ACCOUNT_1,
@@ -408,7 +408,7 @@ async def test_preflight_failure_falls_back_to_blind_fetch(
         await hass.async_block_till_done()
 
     assert entry.state == ConfigEntryState.LOADED
-    assert call_count == INITIAL_LOOKBACK_DAYS
+    assert call_count == LOOKUP_DAYS
 
 
 async def test_preflight_bounds_hourly_fetches(
@@ -450,7 +450,7 @@ async def test_preflight_bounds_hourly_fetches(
     ):
         mock_ei_http(m, db, hourly_cb=tracking_callback, bill_period_response=bp_response)
 
-        # First refresh: lookback=INITIAL_LOOKBACK_DAYS but only period dates fetched
+        # First refresh: lookback=LOOKUP_DAYS, further bounded by bill periods
         await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 

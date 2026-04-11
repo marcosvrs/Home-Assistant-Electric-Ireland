@@ -106,7 +106,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
             existing = await get_instance(self.hass).async_add_executor_job(
                 partial(get_last_statistics, self.hass, 1, stat_id, True, statistic_types)
             )
-            lookback = LOOKUP_DAYS if existing else INITIAL_LOOKBACK_DAYS
+            lookback = LOOKUP_DAYS
 
             if not self._has_imported_before:
                 self._has_imported_before = bool(existing)
@@ -325,14 +325,14 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
             _LOGGER.exception("Unexpected error during update")
             raise UpdateFailed(f"Unexpected error: {err}") from err
 
-    async def async_tariff_backfill(self) -> None:
-        """One-time background backfill using all available bill periods.
+    async def async_tariff_backfill(self, *, full_history: bool = False) -> None:
+        """Background backfill of historical data.
 
-        Called once after setup when tariff_stats_initialized is unset.
-        Uses bill periods to determine the full historical date range, then
-        fetches every available day sequentially.
+        When full_history is True, uses all available bill periods (6-13 months).
+        When full_history is False, fetches the last INITIAL_LOOKBACK_DAYS (30 days).
+        Skips if tariff_stats_initialized is set and full_history is False.
         """
-        if self._config_entry.data.get("tariff_stats_initialized"):
+        if not full_history and self._config_entry.data.get("tariff_stats_initialized"):
             return
 
         session = async_create_clientsession(self.hass, cookie_jar=aiohttp.CookieJar())
@@ -340,8 +340,16 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
             meter_ids, _ = await self._api.authenticate(session, None)
 
             try:
-                bill_periods = await self._api.get_bill_periods(session, meter_ids)
-            except CannotConnect:
+                meter_ids, _ = await self._api.authenticate(session, None)
+            except InvalidAuth as err:
+                raise ConfigEntryAuthFailed from err
+
+            if full_history:
+                try:
+                    bill_periods = await self._api.get_bill_periods(session, meter_ids)
+                except CannotConnect:
+                    bill_periods = []
+            else:
                 bill_periods = []
 
             yesterday = (dt_now() - timedelta(days=1)).date()

@@ -77,7 +77,7 @@ async def test_setup_entry_with_full_history_import(recorder_mock, hass, enable_
         await hass.async_block_till_done()
 
         assert entry.state == ConfigEntryState.LOADED
-        assert "Launching full history import background task" in caplog.text
+        assert "Launching full history backfill background task" in caplog.text
         updated_entry = hass.config_entries.async_get_entry(entry.entry_id)
         assert updated_entry.data.get("import_full_history") is False
 

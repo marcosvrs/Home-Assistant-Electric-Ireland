@@ -50,16 +50,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ElectricIrelandConfigEnt
 
     entry.async_on_unload(coordinator.async_add_listener(lambda: None))
 
-    if entry.data.get("import_full_history"):
+    import_full = entry.data.get("import_full_history", False)
+    if import_full:
         new_data = {**dict(entry.data), "import_full_history": False}
         hass.config_entries.async_update_entry(entry, data=new_data)
+
+    needs_backfill = import_full or not entry.data.get("tariff_stats_initialized")
+    if needs_backfill:
         entry.async_create_background_task(
             hass,
-            coordinator.async_tariff_backfill(),
-            "electric_ireland_full_history_import",
+            coordinator.async_tariff_backfill(full_history=import_full),
+            "electric_ireland_backfill",
         )
         _LOGGER.debug(
-            "Launching full history import background task, account=%s",
+            "Launching %s backfill background task, account=%s",
+            "full history" if import_full else "initial 30-day",
             entry.data["account_number"],
         )
 

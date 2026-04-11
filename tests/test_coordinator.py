@@ -81,12 +81,12 @@ def _setup_api_mock(
 
 
 # ---------------------------------------------------------------------------
-# Test 1: First run uses 30-day lookback when no stats exist
+# Test 1: First run uses LOOKUP_DAYS lookback (backfill happens in background)
 # ---------------------------------------------------------------------------
 
 
-async def test_first_run_imports_30_days(recorder_mock, hass, mock_config_entry):
-    """Test first run uses 30-day lookback when no stats exist."""
+async def test_first_run_imports_lookup_days(recorder_mock, hass, mock_config_entry):
+    """Test first run uses LOOKUP_DAYS lookback; 30-day backfill is deferred to background task."""
     mock_config_entry.add_to_hass(hass)
 
     with (
@@ -108,11 +108,11 @@ async def test_first_run_imports_30_days(recorder_mock, hass, mock_config_entry)
         coordinator = ElectricIrelandCoordinator(hass, mock_config_entry)
         await coordinator._async_update_data()
 
-        assert mock_api_instance.get_hourly_usage.call_count == INITIAL_LOOKBACK_DAYS
+        assert mock_api_instance.get_hourly_usage.call_count == LOOKUP_DAYS
 
 
 # ---------------------------------------------------------------------------
-# Test 2: Subsequent run uses 7-day lookback when stats already exist
+# Test 2: Subsequent run uses 4-day lookback when stats already exist
 # ---------------------------------------------------------------------------
 
 
@@ -1935,6 +1935,6 @@ async def test_tariff_backfill_bill_periods_cannot_connect_falls_back(recorder_m
         from custom_components.electric_ireland_insights.coordinator import ElectricIrelandCoordinator
 
         coordinator = ElectricIrelandCoordinator(hass, entry)
-        await coordinator.async_tariff_backfill()
+        await coordinator.async_tariff_backfill(full_history=True)
 
         assert mock_api_instance.get_hourly_usage.call_count == INITIAL_LOOKBACK_DAYS
