@@ -478,20 +478,27 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
             )
 
         default_name = f"Electric Ireland {'Consumption' if metric == 'consumption' else 'Cost'} ({self._account})"
-        metadata_kwargs: dict[str, object] = {
-            "has_sum": True,
-            "name": name_override or default_name,
-            "source": DOMAIN,
-            "statistic_id": statistic_id,
-            "unit_of_measurement": unit,
-        }
+        stat_name = name_override or default_name
         try:
             from homeassistant.components.recorder.models import StatisticMeanType  # type: ignore[attr-defined]
 
-            metadata_kwargs["mean_type"] = StatisticMeanType.NONE
-            metadata_kwargs["unit_class"] = "energy" if metric == "consumption" else None
+            metadata = StatisticMetaData(
+                has_sum=True,
+                mean_type=StatisticMeanType.NONE,
+                name=stat_name,
+                source=DOMAIN,
+                statistic_id=statistic_id,
+                unit_of_measurement=unit,
+                unit_class="energy" if metric == "consumption" else None,
+            )
         except ImportError:
-            metadata_kwargs["has_mean"] = False
-        metadata = StatisticMetaData(**metadata_kwargs)  # type: ignore[arg-type]
+            metadata = StatisticMetaData(
+                has_mean=False,
+                has_sum=True,
+                name=stat_name,
+                source=DOMAIN,
+                statistic_id=statistic_id,
+                unit_of_measurement=unit,
+            )
 
         async_add_external_statistics(self.hass, metadata, statistics)
