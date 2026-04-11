@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-13-file HA custom integration that scrapes Electric Ireland for hourly energy data and imports it as external statistics. No sensor entities for core data — only diagnostic sensors for health monitoring.
+14-file HA custom integration that scrapes Electric Ireland for hourly energy data and imports it as external statistics. No sensor entities for core data — only diagnostic sensors for health monitoring.
 
 ## STRUCTURE
 
@@ -18,7 +18,9 @@ electric_ireland_insights/
 ├── diagnostics.py      # async_get_config_entry_diagnostics with redaction
 ├── const.py            # DOMAIN, NAME, SCAN_INTERVAL, LOOKBACK constants
 ├── manifest.json       # Integration metadata, deps: [recorder], req: [beautifulsoup4]
-├── strings.json        # Translations: config flow steps/errors, entity names
+├── strings.json        # Translations source: config flow steps/errors, entity names
+├── translations/
+│   └── en.json         # Runtime translations (must mirror strings.json for HACS)
 ├── icons.json          # Entity icons: mdi:clock-check-outline, mdi:calendar-clock
 └── quality_scale.yaml  # IQS self-assessment: 52/52 rules addressed
 ```
