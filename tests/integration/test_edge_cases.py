@@ -343,18 +343,17 @@ async def test_end_of_hour_timestamp_aligns_correctly(
         date_str = url.query.get("date", "2026-03-23")
         dt = datetime.fromisoformat(date_str).replace(tzinfo=UTC)
         prefix = dt.strftime("%Y-%m-%dT")
-        data = []
-        for hour in range(24):
-            data.append(
-                {
-                    "startDate": f"{prefix}{hour:02d}:00:00Z",
-                    "endDate": f"{prefix}{hour:02d}:59:59Z",
-                    "flatRate": {"consumption": 0.5, "cost": 0.10},
-                    "offPeak": None,
-                    "midPeak": None,
-                    "onPeak": None,
-                }
-            )
+        data = [
+            {
+                "startDate": f"{prefix}{hour:02d}:00:00Z",
+                "endDate": f"{prefix}{hour:02d}:59:59Z",
+                "flatRate": {"consumption": 0.5, "cost": 0.10},
+                "offPeak": None,
+                "midPeak": None,
+                "onPeak": None,
+            }
+            for hour in range(24)
+        ]
         return CallbackResult(
             status=200,
             body=json.dumps({"isSuccess": True, "data": data}),
@@ -476,18 +475,17 @@ async def test_zero_consumption_is_valid_data(
         date_str = url.query.get("date", "2026-03-24")
         dt = datetime.fromisoformat(date_str).replace(tzinfo=UTC)
         prefix = dt.strftime("%Y-%m-%dT")
-        data = []
-        for hour in range(24):
-            data.append(
-                {
-                    "startDate": f"{prefix}{hour:02d}:00:00Z",
-                    "endDate": f"{prefix}{hour:02d}:59:59Z",
-                    "flatRate": {"consumption": 0.0, "cost": 0.0},
-                    "offPeak": None,
-                    "midPeak": None,
-                    "onPeak": None,
-                }
-            )
+        data = [
+            {
+                "startDate": f"{prefix}{hour:02d}:00:00Z",
+                "endDate": f"{prefix}{hour:02d}:59:59Z",
+                "flatRate": {"consumption": 0.0, "cost": 0.0},
+                "offPeak": None,
+                "midPeak": None,
+                "onPeak": None,
+            }
+            for hour in range(24)
+        ]
         return CallbackResult(
             status=200,
             body=json.dumps({"isSuccess": True, "data": data}),
