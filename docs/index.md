@@ -110,7 +110,7 @@ For smart meter accounts on a time-of-use tariff, the integration automatically 
 - If you're on a **flat-rate** tariff (single bucket), per-tariff statistics are not created (they would be identical to the totals).
 - If only one non-flat bucket appears (e.g., off-peak only), per-tariff statistics are still created.
 - Historical accounts that switched from flat-rate to smart meter will also show a `_flat_rate` statistic for the period before the switch.
-- Per-tariff statistics may not appear immediately after setup — they are populated during the background backfill and on subsequent hourly updates.
+- Per-tariff statistics may not appear immediately after setup — they are populated during the background backfill and on subsequent poll updates.
 
 ### Setting up the Energy Dashboard with per-tariff breakdown
 
@@ -128,7 +128,7 @@ The Energy Dashboard will now display separate colored bars per hour/day for eac
 
 ## Diagnostic entities
 
-Two diagnostic sensor entities are created under the integration's device. Entity IDs include the account number (e.g., `sensor.electric_ireland_123456789_timestamp`). In multi-account setups, each account has its own set of diagnostic sensors.
+Two diagnostic sensor entities are created under the integration's device. Entity IDs include the account number (e.g., `sensor.electric_ireland_insights_123456789_last_import_time`). In multi-account setups, each account has its own set of diagnostic sensors.
 
 | Entity | Description |
 |--------|-------------|
@@ -193,12 +193,12 @@ automation:
   - alias: "Alert: Electric Ireland data stale"
     triggers:
       - trigger: numeric_state
-        entity_id: sensor.electric_ireland_ACCOUNT
+        entity_id: sensor.electric_ireland_insights_ACCOUNT_data_freshness
         above: 5
     actions:
       - action: notify.mobile_app
         data:
-          message: "Electric Ireland data is {{ states('sensor.electric_ireland_ACCOUNT') }} days old."
+          message: "Electric Ireland data is {{ states('sensor.electric_ireland_insights_ACCOUNT_data_freshness') }} days old."
 ```
 
 ## Known limitations

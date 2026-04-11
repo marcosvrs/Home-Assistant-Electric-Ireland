@@ -9,10 +9,10 @@ Home Assistant custom integration (HACS) for **Electric Ireland Insights**. Scra
 ```
 .
 ├── custom_components/electric_ireland_insights/   # The integration (see its own AGENTS.md)
-├── tests/                                         # All tests (see its own AGENTS.md)
+├── tests/                                         # All tests (12 test files + 2 conftest, see its own AGENTS.md)
 ├── docs/index.md                                  # HA-format integration documentation
 ├── brands/README.md                               # Branding assets (pending HA brands repo submission)
-├── .github/workflows/validate.yml                 # CI: hassfest, HACS, ruff, mypy, tests (3.12/3.13)
+├── .github/workflows/validate.yml                 # CI: hassfest, HACS, ruff, mypy, tests (3.13)
 ├── .github/dependabot.yml                         # Automated dependency updates (pip + actions)
 ├── .pre-commit-config.yaml                        # Pre-commit hooks: ruff, mypy, codespell, whitespace
 ├── pyproject.toml                                 # Build config, dev deps, ruff + mypy + pytest settings
@@ -26,7 +26,7 @@ Home Assistant custom integration (HACS) for **Electric Ireland Insights**. Scra
 | Task | Location | Notes |
 |------|----------|-------|
 | Integration source | `custom_components/electric_ireland_insights/` | 13 files, see sub-AGENTS.md |
-| Tests | `tests/` | 9 test files + 2 conftest, see sub-AGENTS.md |
+| Tests | `tests/` | 12 test files + 2 conftest, see sub-AGENTS.md |
 | CI pipeline | `.github/workflows/validate.yml` | hassfest, HACS, ruff, mypy, pytest --cov-fail-under=95 |
 | HA-format docs | `docs/index.md` | For home-assistant.io submission |
 | Quality compliance | `custom_components/.../quality_scale.yaml` | 52-rule IQS self-assessment |
@@ -436,7 +436,7 @@ Before any change is considered complete:
 
 ## NOTES
 
-- Electric Ireland data arrives with 1-3 day delay from ESB. The coordinator uses a lookback window (30 days initial, 7 days subsequent) to catch late-arriving data.
+- Electric Ireland data arrives with 1-3 day delay from ESB. The coordinator uses a lookback window (30 days initial, 4 days subsequent) to catch late-arriving data.
 - The integration scrapes HTML (no official API). Login mimics browser interaction with CSRF tokens. This is fragile — website changes can break the integration.
 - `beautifulsoup4` is the only external dependency. All HTTP goes through HA's aiohttp infrastructure.
 - Statistics use cumulative sum with overlap detection to maintain recorder continuity.

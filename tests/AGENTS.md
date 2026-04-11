@@ -2,7 +2,7 @@
 
 ## OVERVIEW
 
-9 test files + 2 conftest, ~3,700 lines, >=95% coverage. Uses `pytest-homeassistant-custom-component` for HA test harness, `aioresponses` for HTTP mocking. All tests are async (`asyncio_mode = "auto"`).
+12 test files + 2 conftest, ~6,845 lines, >=95% coverage. Uses `pytest-homeassistant-custom-component` for HA test harness, `aioresponses` for HTTP mocking. All tests are async (`asyncio_mode = "auto"`).
 
 ## STRUCTURE
 
@@ -10,19 +10,27 @@
 tests/
 ├── conftest.py                     # Shared fixtures: mock_config_entry, mock_api, mock_setup_entry
 │                                   # + pycares daemon thread prevention (module-level patch)
-├── test_api.py                     # API client tests (37 tests, 630 lines)
-├── test_coordinator.py             # Coordinator + statistics tests (22 tests, 898 lines)
-├── test_config_flow.py             # Config flow tests (20 tests, 608 lines)
-├── test_sensor.py                  # Diagnostic sensor tests (9 tests, 138 lines)
-├── test_init.py                    # Setup/unload/migration tests (4 tests, 111 lines)
-├── test_diagnostics.py             # Diagnostics redaction tests (4 tests, 89 lines)
+├── assertions.py                   # Contract-based assertion helpers for statistics invariants
+├── test_api.py                     # API client tests (47 tests, 871 lines)
+├── test_coordinator.py             # Coordinator + statistics tests (46 tests, 1940 lines)
+├── test_config_flow.py             # Config flow tests (20 tests, 638 lines)
+├── test_sensor.py                  # Diagnostic sensor tests (9 tests, 166 lines)
+├── test_init.py                    # Setup/unload/migration tests (5 tests, 173 lines)
+├── test_diagnostics.py             # Diagnostics redaction tests (4 tests, 87 lines)
 ├── fixtures/
-│   └── sample_hourly_response.json # 24 hourly datapoints with consumption/cost
+│   ├── sample_hourly_response.json # 24 hourly datapoints with consumption/cost
+│   ├── bill_period_response.json   # Bill period API response
+│   ├── schemas.py                  # Fixture validation schemas
+│   ├── README.md                   # Fixture documentation
+│   └── real/                       # Anonymized real-data fixtures (HTML + JSON)
 ├── integration/                    # Real integration tests (aioresponses only, no mocked internals)
 │   ├── conftest.py                 # HTML/JSON builders, mock_ei_http helper
-│   ├── test_flows.py              # Config flow integration tests (12 tests, 436 lines)
-│   ├── test_lifecycle.py          # Setup/unload/migration integration tests (11 tests, 368 lines)
-│   └── test_api.py                # Account discovery + meter data fetch (17 tests, 242 lines)
+│   ├── test_flows.py              # Config flow integration tests (12 tests, 464 lines)
+│   ├── test_lifecycle.py          # Setup/unload/migration integration tests (14 tests, 493 lines)
+│   ├── test_api.py                # Account discovery + meter data fetch (18 tests, 260 lines)
+│   ├── test_bug_discovery.py      # Bug discovery integration tests (11 tests, 599 lines)
+│   ├── test_edge_cases.py         # Edge case integration tests (18 tests, 839 lines)
+│   └── test_tariffs.py            # Per-tariff statistics tests (7 tests, 315 lines)
 └── __init__.py                     # Empty
 ```
 
@@ -73,11 +81,11 @@ tests/
 
 | File | Tests | What It Validates |
 |------|-------|-------------------|
-| `test_api.py` | 37 | Login flow (CSRF extraction, POST, redirects), account discovery (scraping account divs), hourly data fetch (JSON parsing, tariff selection), error handling (auth failure, connection error, missing accounts, stale cached IDs) |
-| `test_coordinator.py` | 22 | First refresh (30-day backfill), subsequent refresh (7-day lookback), statistics import (cumulative sums, overlap detection), auth failure → `ConfigEntryAuthFailed`, connection failure → `UpdateFailed`, meter ID caching, state logging transitions |
+| `test_api.py` | 47 | Login flow (CSRF extraction, POST, redirects), account discovery (scraping account divs), hourly data fetch (JSON parsing, tariff selection), error handling (auth failure, connection error, missing accounts, stale cached IDs) |
+| `test_coordinator.py` | 46 | First refresh (30-day backfill), subsequent refresh (4-day lookback), statistics import (cumulative sums, overlap detection, per-tariff), auth failure → `ConfigEntryAuthFailed`, connection failure → `UpdateFailed`, meter ID caching, state logging transitions, event firing, repair issues |
 | `test_config_flow.py` | 20 | User step (happy path, invalid auth, connection error, unknown error), account selection (single/multiple accounts), reauth flow (success, failure), reconfigure flow (password change, meter ID rediscovery), unique ID abort |
 | `test_sensor.py` | 9 | Entity creation, native_value correctness, unique_id format, device_info structure, entity_category = DIAGNOSTIC, disabled_by_default = True |
-| `test_init.py` | 4 | Setup success, unload success, v1→v2 migration, setup failure handling |
+| `test_init.py` | 5 | Setup success, unload success, v1→v2 migration, setup failure handling, full history import trigger |
 | `test_diagnostics.py` | 4 | Diagnostics data structure, credential redaction, meter ID redaction, coordinator data inclusion |
 
 ### Integration Tests
@@ -85,8 +93,11 @@ tests/
 | File | Tests | What It Validates |
 |------|-------|-------------------|
 | `test_flows.py` | 12 | Full config flow with real HTML parsing: single/multi account, reauth, reconfigure, error recovery, duplicate abort |
-| `test_lifecycle.py` | 11 | Full setup→refresh→unload cycle, meter ID discovery + caching, multi-account isolation, v1→v2 migration, auth/connection failure handling |
-| `test_api.py` | 17 | Account discovery from real HTML, hourly meter data fetch with real JSON parsing |
+| `test_lifecycle.py` | 14 | Full setup→refresh→unload cycle, meter ID discovery + caching, multi-account isolation, v1→v2 migration, auth/connection failure handling, full history import |
+| `test_api.py` | 18 | Account discovery from real HTML, hourly meter data fetch with real JSON parsing |
+| `test_bug_discovery.py` | 11 | Bug discovery scenarios: cumulative statistics edge cases, data gap handling, overlap recovery |
+| `test_edge_cases.py` | 18 | Edge case scenarios: HTML variations, timestamp boundary conditions, empty/partial data, recovery from corrupt state |
+| `test_tariffs.py` | 7 | Per-tariff statistics: flat-rate vs time-of-use, tariff bucket extraction, per-tariff statistic ID generation and import |
 
 ## CONVENTIONS
 

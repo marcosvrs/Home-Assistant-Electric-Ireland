@@ -53,10 +53,25 @@ This integration imports external statistics directly into the HA recorder — n
 
 | Statistic ID | Description | Unit |
 |---|---|---|
-| `electric_ireland_insights:{account}_consumption` | Hourly electricity consumption | kWh |
+| `electric_ireland_insights:{account}_consumption` | Hourly electricity consumption (total) | kWh |
 | `electric_ireland_insights:{account}_cost` | Hourly electricity cost (gross, with VAT, no discounts or standing charge) | EUR |
 
 Add these under **Settings → Energy → Grid consumption**.
+
+#### Per-tariff breakdown (smart meter accounts)
+
+For accounts on a time-of-use tariff, the integration also imports separate statistics per tariff bucket:
+
+| Statistic ID | Description | Unit |
+|---|---|---|
+| `electric_ireland_insights:{account}_consumption_off_peak` | Off-peak consumption | kWh |
+| `electric_ireland_insights:{account}_consumption_mid_peak` | Mid-peak consumption | kWh |
+| `electric_ireland_insights:{account}_consumption_on_peak` | On-peak consumption | kWh |
+| `electric_ireland_insights:{account}_cost_off_peak` | Off-peak cost | EUR |
+| `electric_ireland_insights:{account}_cost_mid_peak` | Mid-peak cost | EUR |
+| `electric_ireland_insights:{account}_cost_on_peak` | On-peak cost | EUR |
+
+Per-tariff statistics are only created when the active tariff bucket varies across hours. Flat-rate accounts will only have the aggregate statistics above. See [docs/index.md](docs/index.md) for detailed setup instructions.
 
 ### Smarter Data Fetching
 

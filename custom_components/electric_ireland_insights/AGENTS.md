@@ -20,7 +20,7 @@ electric_ireland_insights/
 ├── manifest.json       # Integration metadata, deps: [recorder], req: [beautifulsoup4]
 ├── strings.json        # Translations: config flow steps/errors, entity names
 ├── icons.json          # Entity icons: mdi:clock-check-outline, mdi:calendar-clock
-└── quality_scale.yaml  # IQS self-assessment: 51/52 done, 1 todo (brands)
+└── quality_scale.yaml  # IQS self-assessment: 52/52 rules addressed
 ```
 
 ## FILE-BY-FILE GUIDE
@@ -29,8 +29,8 @@ electric_ireland_insights/
 |------|-------------|---------------|
 | `__init__.py` | `async_setup_entry`, `async_unload_entry`, `async_migrate_entry`, `ElectricIrelandConfigEntry` | Creates coordinator, assigns `entry.runtime_data`, forwards sensor platform. Migration adds meter ID caching fields. |
 | `api.py` | `ElectricIrelandAPI`, `MeterInsightClient` | Session-based scraping: GET login page → extract CSRF → POST credentials → scrape account div → navigate Insights → call MeterInsight/hourly-usage. Sequential day-by-day. |
-| `coordinator.py` | `ElectricIrelandCoordinator`, `_async_update_data`, `_insert_statistics` | Hourly polling. First run: 30-day backfill. Subsequent: 7-day lookback. Imports consumption + cost via `async_add_external_statistics`. Handles cumulative sum continuity with overlap detection. |
-| `config_flow.py` | `ElectricIrelandInsightsConfigFlow` | Steps: `user` (credentials) → `account` (dropdown if multiple, auto-selected if one) → create entry. `reauth_confirm` for expired passwords. `reconfigure` for password change + meter ID rediscovery. |
+| `coordinator.py` | `ElectricIrelandCoordinator`, `_async_update_data`, `_insert_statistics` | 3-hour polling. First run: 30-day backfill. Subsequent: 4-day lookback. Imports consumption + cost (aggregate + per-tariff) via `async_add_external_statistics`. Handles cumulative sum continuity with overlap detection. Fires `electric_ireland_insights_data_imported` event. Creates repair issue if data stale >5 days. |
+| `config_flow.py` | `ElectricIrelandInsightsConfigFlow` | Steps: `user` (credentials) → `account` (dropdown if multiple, auto-selected if one) → `options` (import full history toggle) → create entry. `reauth_confirm` for expired passwords. `reconfigure` for password change + meter ID rediscovery + full history import. |
 | `sensor.py` | `ElectricIrelandDiagnosticSensor`, `DIAGNOSTIC_SENSORS`, `PARALLEL_UPDATES = 0` | One `CoordinatorEntity` subclass instantiated per diagnostic description: last import timestamp + data freshness days. Disabled by default. EntityCategory.DIAGNOSTIC. |
 | `types.py` | `ElectricIrelandDatapoint`, `CoordinatorData`, `MeterIds` | TypedDicts for type safety. Omitted from coverage (TypedDict-only). |
 | `exceptions.py` | `InvalidAuth`, `CannotConnect`, `AccountNotFound`, `CachedIdsInvalid` | Auth errors → reauth flow. Connect errors → retry. CachedIdsInvalid → full login fallback (not auth failure). |
@@ -55,7 +55,7 @@ HA Recorder → Energy Dashboard
 - **Config entry version**: 2 (v1→v2 migration adds meter ID fields for caching).
 - **Typed config entry**: `type ElectricIrelandConfigEntry = ConfigEntry[ElectricIrelandCoordinator]` used throughout.
 - **Unique ID**: `account_number` (set in config flow, prevents duplicates).
-- **Statistic IDs**: `electric_ireland_insights:{account_number}_consumption`, `electric_ireland_insights:{account_number}_cost`.
+- **Statistic IDs**: `electric_ireland_insights:{account_number}_consumption`, `electric_ireland_insights:{account_number}_cost` (aggregate); plus per-tariff variants like `_consumption_off_peak`, `_cost_mid_peak` etc. for time-of-use accounts.
 - **Tariff bucket selection**: Active bucket (flatRate, offPeak, midPeak, onPeak) extracted per hour — only one is active at a time.
 - **State logging**: Coordinator logs state transitions (unavailable ↔ available) once per transition, not every poll.
 
