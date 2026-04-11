@@ -9,7 +9,7 @@ from typing import Literal
 
 import aiohttp
 from homeassistant.components.recorder import get_instance  # type: ignore[attr-defined]
-from homeassistant.components.recorder.models import StatisticData, StatisticMetaData
+from homeassistant.components.recorder.models import StatisticData, StatisticMeanType, StatisticMetaData
 from homeassistant.components.recorder.statistics import (
     async_add_external_statistics,
     get_last_statistics,
@@ -479,26 +479,14 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
 
         default_name = f"Electric Ireland {'Consumption' if metric == 'consumption' else 'Cost'} ({self._account})"
         stat_name = name_override or default_name
-        try:
-            from homeassistant.components.recorder.models import StatisticMeanType  # type: ignore[attr-defined]
-
-            metadata = StatisticMetaData(
-                has_sum=True,
-                mean_type=StatisticMeanType.NONE,
-                name=stat_name,
-                source=DOMAIN,
-                statistic_id=statistic_id,
-                unit_of_measurement=unit,
-                unit_class="energy" if metric == "consumption" else None,
-            )
-        except ImportError:
-            metadata = StatisticMetaData(
-                has_mean=False,
-                has_sum=True,
-                name=stat_name,
-                source=DOMAIN,
-                statistic_id=statistic_id,
-                unit_of_measurement=unit,
-            )
+        metadata = StatisticMetaData(
+            has_sum=True,
+            mean_type=StatisticMeanType.NONE,
+            name=stat_name,
+            source=DOMAIN,
+            statistic_id=statistic_id,
+            unit_of_measurement=unit,
+            unit_class="energy" if metric == "consumption" else None,
+        )
 
         async_add_external_statistics(self.hass, metadata, statistics)
