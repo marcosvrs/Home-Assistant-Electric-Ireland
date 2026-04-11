@@ -1596,7 +1596,7 @@ async def test_event_fired_on_successful_import(recorder_mock, hass, mock_config
     events: list = []
     hass.bus.async_listen(
         f"{DOMAIN}_data_imported",
-        lambda event: events.append(event),
+        events.append,
     )
 
     with (

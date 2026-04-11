@@ -72,6 +72,7 @@ select = [
   "PERF",   # perflint
   "PGH",    # pygrep-hooks
   "PIE",    # flake8-pie
+  "PL",     # pylint (via ruff)
   "PT",     # flake8-pytest-style
   "RET",    # flake8-return
   "RUF",    # ruff-specific rules
@@ -85,26 +86,33 @@ select = [
   "W",      # pycodestyle warnings
 ]
 ignore = [
-  "S101",   # assert used (fine in tests)
-  "TC001",  # move app import to TYPE_CHECKING (HA core also ignores)
-  "TC002",  # move third-party import to TYPE_CHECKING (HA core also ignores)
-  "TC003",  # move stdlib import to TYPE_CHECKING (HA core also ignores)
-  "TRY003", # long messages in exceptions (we use descriptive errors)
-  "TRY301", # abstract raise to inner function (overly prescriptive)
-  "TRY400", # logging.error inside except (we log warnings deliberately)
+  "PLR0911", # too many return statements (HA core also ignores)
+  "PLR0912", # too many branches (HA core also ignores)
+  "PLR0913", # too many arguments (HA core also ignores)
+  "PLR0915", # too many statements (HA core also ignores)
+  "PLR2004", # magic value in comparison (HA core also ignores)
+  "PLW0108", # unnecessary lambda (false positive on forward references)
+  "S101",    # assert used (fine in tests)
+  "TC001",   # move app import to TYPE_CHECKING (HA core also ignores)
+  "TC002",   # move third-party import to TYPE_CHECKING (HA core also ignores)
+  "TC003",   # move stdlib import to TYPE_CHECKING (HA core also ignores)
+  "TRY003",  # long messages in exceptions (we use descriptive errors)
+  "TRY301",  # abstract raise to inner function (overly prescriptive)
+  "TRY400",  # logging.error inside except (we log warnings deliberately)
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = [
-  "S",      # security checks not relevant in tests
-  "B018",   # useless expression (used in tests for side effects)
-  "PT012",  # pytest.raises should contain a single statement
-  "PT018",  # compound assertion (acceptable in test helpers)
-  "SLF001", # private member access (testing internals)
-  "TRY",    # exception style not relevant in tests
+  "S",       # security checks not relevant in tests
+  "B018",    # useless expression (used in tests for side effects)
+  "PLC0415", # import not at top level (deliberate pattern with patch())
+  "PT012",   # pytest.raises should contain a single statement
+  "PT018",   # compound assertion (acceptable in test helpers)
+  "SLF001",  # private member access (testing internals)
+  "TRY",     # exception style not relevant in tests
 ]
 "custom_components/**/api.py" = [
-  "SLF001", # private member access within same module (MeterInsightClient internals)
+  "SLF001",  # private member access within same module (MeterInsightClient internals)
 ]
 
 [tool.ruff.lint.isort]
