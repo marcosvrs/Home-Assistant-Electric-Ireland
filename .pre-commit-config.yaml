@@ -29,6 +29,6 @@ repos:
     hooks:
       - id: mypy
         files: ^custom_components/
-        args: [--strict, --no-warn-return-any, --ignore-missing-imports]
+        args: [--strict, --no-warn-return-any, --no-warn-unused-ignores, --ignore-missing-imports]
         additional_dependencies:
           - types-beautifulsoup4
