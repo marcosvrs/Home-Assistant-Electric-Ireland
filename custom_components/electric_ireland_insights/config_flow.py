@@ -52,6 +52,7 @@ class ElectricIrelandInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN
                 self._username = user_input["username"]
                 self._password = user_input["password"]
                 self._accounts = accounts
+                _LOGGER.debug("Credential validation successful, found %d account(s)", len(accounts))
 
                 if len(accounts) == 1:
                     return await self._finish_flow(accounts[0]["account_number"])
@@ -113,6 +114,7 @@ class ElectricIrelandInsightsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN
 
         self._account_number = account_number
         self._meter_ids = meter_ids
+        _LOGGER.debug("Account %s validated, proceeding to options", account_number)
         return await self.async_step_options()
 
     async def async_step_options(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:

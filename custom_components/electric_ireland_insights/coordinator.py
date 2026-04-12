@@ -86,6 +86,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
                         "days": str(round(gap_days, 1)),
                     },
                 )
+                _LOGGER.debug("Created repair issue: data_gap_%s (%.1f days stale)", self._account, gap_days)
             else:
                 async_delete_issue(self.hass, DOMAIN, f"data_gap_{self._account}")
 
@@ -110,6 +111,11 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
 
             if not self._has_imported_before:
                 self._has_imported_before = bool(existing)
+                _LOGGER.debug(
+                    "Statistics check: existing=%s, lookback=%d days",
+                    bool(existing),
+                    lookback,
+                )
 
             entry_data = self._config_entry.data
             cached_ids: MeterIds | None = None
@@ -257,6 +263,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
                 f"{DOMAIN}:{self._account}_cost",
                 "EUR",
             )
+            _LOGGER.debug("Imported %d aggregate datapoints for account=%s", len(datapoints), self._account)
 
             buckets: dict[str, list[ElectricIrelandDatapoint]] = {}
             for dp in datapoints:
@@ -264,6 +271,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
 
             seen_buckets = set(buckets.keys())
             if len(seen_buckets) > 1 or (len(seen_buckets) == 1 and "flat_rate" not in seen_buckets):
+                _LOGGER.debug("Per-tariff statistics: buckets=%s", sorted(seen_buckets))
                 for bucket_name, bucket_dps in buckets.items():
                     display = TARIFF_BUCKET_MAP_DISPLAY.get(bucket_name, bucket_name.replace("_", " ").title())
                     await self._insert_statistics(
@@ -293,6 +301,12 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
                     "tariff_buckets": sorted(seen_buckets),
                 },
             )
+            _LOGGER.debug(
+                "Fired %s_data_imported event: %d datapoints, latest=%s",
+                DOMAIN,
+                len(datapoints),
+                latest_data_ts,
+            )
 
             return _mark_success(
                 {
@@ -308,6 +322,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
 
         except InvalidAuth as err:
             self._last_update_success = False
+            _LOGGER.error("Authentication failed: %s", err)
             raise ConfigEntryAuthFailed from err
         except CannotConnect as err:
             if was_successful:
@@ -377,6 +392,7 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
                     day_data = await self._api.get_hourly_usage(session, meter_ids, target_date)
                     datapoints.extend(day_data)
                 except CachedIdsInvalid:
+                    _LOGGER.debug("Backfill: CachedIdsInvalid on %s, re-authenticating", target_date)
                     session.cookie_jar.clear()
                     meter_ids, _ = await self._api.authenticate(session, None)
                     day_data = await self._api.get_hourly_usage(session, meter_ids, target_date)

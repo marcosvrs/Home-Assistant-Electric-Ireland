@@ -67,6 +67,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ElectricIrelandConfigEnt
             "full history" if import_full else "initial 30-day",
             entry.data["account_number"],
         )
+    else:
+        _LOGGER.debug("No backfill needed, tariff_stats already initialized")
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _LOGGER.debug(

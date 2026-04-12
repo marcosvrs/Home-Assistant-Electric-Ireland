@@ -46,6 +46,7 @@ class ElectricIrelandAPI:
             rvt = rvt_val if isinstance(rvt_val, str) else None
 
         if not source or not rvt:
+            _LOGGER.debug("Login token extraction failed: source=%s, rvt=%s", bool(source), bool(rvt))
             raise CannotConnect("Could not extract login tokens")
 
         async with session.post(
@@ -79,8 +80,10 @@ class ElectricIrelandAPI:
         except (CannotConnect, AccountNotFound):
             raise
         except aiohttp.ClientError as err:
+            _LOGGER.debug("Account discovery failed: %s", err)
             raise CannotConnect(str(err)) from err
         except TimeoutError as err:
+            _LOGGER.debug("Account discovery timed out")
             raise CannotConnect("Connection timed out") from err
 
         account_divs = soup2.find_all("div", {"class": "my-accounts__item"})
@@ -171,8 +174,10 @@ class ElectricIrelandAPI:
         except CannotConnect:
             raise
         except aiohttp.ClientError as err:
+            _LOGGER.debug("Bill periods request failed: %s", err)
             raise CannotConnect(str(err)) from err
         except TimeoutError as err:
+            _LOGGER.debug("Bill periods request timed out")
             raise CannotConnect("Connection timed out") from err
 
         if not (data.get("isSuccess") or data.get("IsSuccess")):
@@ -255,6 +260,7 @@ class ElectricIrelandAPI:
                     cached_meter_ids.get("contract"),
                     cached_meter_ids.get("premise"),
                 )
+                _LOGGER.debug("Login successful (cached IDs)")
                 return MeterInsightClient(session, cached_meter_ids)
 
             soup3 = BeautifulSoup(html3, "html.parser")
@@ -282,13 +288,16 @@ class ElectricIrelandAPI:
                 contract,
                 premise,
             )
+            _LOGGER.debug("Login successful (full discovery)")
             return MeterInsightClient(session, {"partner": partner, "contract": contract, "premise": premise})
 
         except (InvalidAuth, CannotConnect, AccountNotFound):
             raise
         except aiohttp.ClientError as err:
+            _LOGGER.debug("Login failed: %s", err)
             raise CannotConnect(str(err)) from err
         except TimeoutError as err:
+            _LOGGER.debug("Login timed out")
             raise CannotConnect("Connection timed out") from err
 
 
@@ -335,8 +344,10 @@ class MeterInsightClient:
         except CannotConnect:
             raise
         except aiohttp.ClientError as err:
+            _LOGGER.debug("Hourly usage request failed for %s: %s", date_str, err)
             raise CannotConnect(f"Failed to fetch hourly usage: {err}") from err
         except TimeoutError as err:
+            _LOGGER.debug("Hourly usage request timed out for %s", date_str)
             raise CannotConnect("Connection timed out") from err
 
         if not data.get("isSuccess"):
