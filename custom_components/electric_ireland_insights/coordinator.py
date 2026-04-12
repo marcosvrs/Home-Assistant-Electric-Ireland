@@ -337,8 +337,6 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
 
         session = async_create_clientsession(self.hass, cookie_jar=aiohttp.CookieJar())
         try:
-            meter_ids, _ = await self._api.authenticate(session, None)
-
             try:
                 meter_ids, _ = await self._api.authenticate(session, None)
             except InvalidAuth as err:

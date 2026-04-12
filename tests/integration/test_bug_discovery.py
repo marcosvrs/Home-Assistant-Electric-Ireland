@@ -23,7 +23,7 @@ from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
 )
 
-from custom_components.electric_ireland_insights.const import DOMAIN
+from custom_components.electric_ireland_insights.const import DOMAIN, LOOKUP_DAYS
 from tests.assertions import (
     assert_conservation,
     assert_cumulative_sums_monotonic,
@@ -128,9 +128,8 @@ async def test_cumulative_sum_continues_across_coordinator_refreshes(
     db = page(acct_div(ACCOUNT_1))
     flat_cb = make_hourly_callback("flatRate")
 
-    # Wide bill period; dt_now controls which dates land in the lookback window
     bp = _bp(date(2026, 1, 1), date(2026, 1, 20))
-    fake_now1 = datetime(2026, 1, 8, 12, 0, tzinfo=UTC)  # yesterday=Jan7, 30d → Jan1-7
+    fake_now1 = datetime(2026, 1, 8, 12, 0, tzinfo=UTC)  # yesterday=Jan7, 4d → Jan4-7
     fake_now2 = datetime(2026, 1, 13, 12, 0, tzinfo=UTC)  # yesterday=Jan12, 4d → Jan9-12
 
     with (
@@ -149,7 +148,7 @@ async def test_cumulative_sum_continues_across_coordinator_refreshes(
         start_q = datetime(2026, 1, 1, tzinfo=UTC)
         end_q = datetime(2026, 2, 1, tzinfo=UTC)
         stats_run1 = await _query(hass, STAT_CONSUMPTION, start_q, end_q)
-        assert len(stats_run1) == 7 * 24
+        assert len(stats_run1) == LOOKUP_DAYS * 24
         sum_after_run1 = stats_run1[-1]["sum"]
 
         mock_dt.return_value = fake_now2
@@ -449,8 +448,7 @@ async def test_floating_point_precision_over_many_hours(
     fp_cb = make_hourly_callback("flatRate", consumption_pattern=[0.1] * 24)
 
     bp = _bp(date(2026, 1, 1), date(2026, 1, 30))
-    # yesterday=Jan30, 30d lookback → Jan1-30, fully within bill period
-    fake_now = datetime(2026, 1, 31, 12, 0, tzinfo=UTC)
+    fake_now = datetime(2026, 1, 31, 12, 0, tzinfo=UTC)  # yesterday=Jan30, 4d → Jan27-30
 
     with (
         patch("custom_components.electric_ireland_insights.coordinator.dt_now") as mock_dt,
@@ -467,15 +465,15 @@ async def test_floating_point_precision_over_many_hours(
     start_q = datetime(2026, 1, 1, tzinfo=UTC)
     end_q = datetime(2026, 2, 1, tzinfo=UTC)
     stats = await _query(hass, STAT_CONSUMPTION, start_q, end_q)
-    assert len(stats) == 30 * 24, f"Expected 720 entries, got {len(stats)}"
+    assert len(stats) == LOOKUP_DAYS * 24, f"Expected {LOOKUP_DAYS * 24} entries, got {len(stats)}"
 
     final_sum = stats[-1]["sum"]
-    expected = 30 * 24 * 0.1  # 72.0
+    expected = LOOKUP_DAYS * 24 * 0.1
     assert abs(final_sum - expected) < 0.01, (
         f"FP precision issue: expected ~{expected}, got {final_sum} (drift={abs(final_sum - expected):.6f})"
     )
 
-    assert_conservation(stats, [0.1] * (30 * 24), tolerance=0.1)
+    assert_conservation(stats, [0.1] * (LOOKUP_DAYS * 24), tolerance=0.1)
     assert_hour_aligned(stats)
 
 
