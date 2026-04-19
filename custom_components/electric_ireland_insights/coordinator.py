@@ -270,8 +270,12 @@ class ElectricIrelandCoordinator(DataUpdateCoordinator[CoordinatorData]):  # typ
                 buckets.setdefault(dp["tariff_bucket"], []).append(dp)
 
             seen_buckets = set(buckets.keys())
+            _LOGGER.debug(
+                "Tariff buckets seen: %s (%s)",
+                sorted(seen_buckets),
+                {k: len(v) for k, v in buckets.items()},
+            )
             if len(seen_buckets) > 1 or (len(seen_buckets) == 1 and "flat_rate" not in seen_buckets):
-                _LOGGER.debug("Per-tariff statistics: buckets=%s", sorted(seen_buckets))
                 for bucket_name, bucket_dps in buckets.items():
                     display = TARIFF_BUCKET_MAP_DISPLAY.get(bucket_name, bucket_name.replace("_", " ").title())
                     await self._insert_statistics(

@@ -358,7 +358,7 @@ class MeterInsightClient:
         _LOGGER.debug("Found %d hourly datapoints for %s", len(raw_datapoints), date_str)
 
         datapoints: list[ElectricIrelandDatapoint] = []
-        usage_tariff_keys = ("flatRate", "offPeak", "midPeak", "onPeak")
+        usage_tariff_keys = ("offPeak", "midPeak", "onPeak", "flatRate")
 
         for dp in raw_datapoints:
             end_date_str = dp.get("endDate")
@@ -373,10 +373,16 @@ class MeterInsightClient:
                 _LOGGER.warning("Failed to parse date %s: %s", end_date_str, err)
                 continue
 
-            active_key = next(
-                (key for key in usage_tariff_keys if dp.get(key) is not None),
-                None,
-            )
+            present_keys = [k for k in usage_tariff_keys if dp.get(k) is not None]
+            active_key = present_keys[0] if present_keys else None
+
+            if len(present_keys) > 1:
+                _LOGGER.debug(
+                    "Multiple tariff keys present for %s: %s (using %s)",
+                    end_date_str,
+                    present_keys,
+                    active_key,
+                )
 
             if active_key is not None:
                 usage_entry = dp[active_key]
